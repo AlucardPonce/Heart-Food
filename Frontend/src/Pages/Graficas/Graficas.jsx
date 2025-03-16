@@ -5,12 +5,12 @@ import Btn from './components/button';
 
 const Graficas = () => {
     return (
-        <div>
+        <div className="graficas-container"> {/* Clase única aquí */}
             <div className='content'>
-                <div class="parent1">
-                    <div class="div1">Gráfica de Querétaro</div>
-                    <div class="div2"><Ventas></Ventas></div>
-                    <div class="div3"><Btn></Btn></div>
+                <div className="parent1">
+                    <div className="div1">Gráfica de Querétaro</div>
+                    <div className="div2"><Ventas></Ventas></div>
+                    <div className="div3"><Btn></Btn></div>
                 </div>
             </div>
         </div>

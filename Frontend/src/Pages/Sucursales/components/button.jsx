@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Select, Input, message, Modal, Form, List } from 'antd';
-import '../components/styles/styles.css';
+import './styles/sucursal.css';
 
 const Bto = ({ label }) => {
     return (

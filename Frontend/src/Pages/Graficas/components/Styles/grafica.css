@@ -1,23 +1,22 @@
-.parent1 {
+/* Aplicar los estilos solo dentro de .graficas-container */
+.graficas-container .parent1 {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     grid-template-rows: repeat(5, 1fr);
     gap: 8px;
 }
     
-.div1 {
+.graficas-container .div1 {
     grid-column: span 5 / span 5;
 }
 
-.div2 {
+.graficas-container .div2 {
     grid-column: span 5 / span 5;
     grid-row: span 3 / span 3;
     grid-row-start: 2;
 }
 
-.div3 {
+.graficas-container .div3 {
     grid-column-start: 3;
     grid-row-start: 5;
 }
-        
-        
