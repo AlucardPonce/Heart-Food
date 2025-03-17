@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Select, Input, message, Modal, Form, List } from 'antd';
+import { Button, Select, Input, Message, Modal, Form, List } from 'antd';
 import './styles/sucursal.css';
 
 const Bto = ({ label }) => {

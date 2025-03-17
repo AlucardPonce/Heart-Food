@@ -1,5 +1,5 @@
 import React from 'react';
-import Options from './components/optionbar';
+import Options from './components/Select';
 import Bto from './components/button';
 import './components/styles/sucursal.css'
 

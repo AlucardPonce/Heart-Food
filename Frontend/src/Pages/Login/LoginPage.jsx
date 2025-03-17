@@ -1,7 +1,7 @@
 import { Form, Input, Button, Card, Typography, message } from "antd";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import Axios from "axios";
 
 const { Title } = Typography;
 
