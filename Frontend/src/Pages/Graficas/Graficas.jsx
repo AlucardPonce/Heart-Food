@@ -8,9 +8,9 @@ const Graficas = () => {
         <div className="graficas-container"> {/* Clase única aquí */}
             <div className='content'>
                 <div className="parent1">
-                    <div className="div1">Gráfica de Querétaro</div>
+                    <div className="div1 titulo">Gráfica de Querétaro</div>
                     <div className="div2"><Ventas></Ventas></div>
-                    <div className="div3"><Btn></Btn></div>
+                    <div className="div3"><Btn label="Descargar Gráfica"></Btn></div>
                 </div>
             </div>
         </div>

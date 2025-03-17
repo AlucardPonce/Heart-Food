@@ -20,3 +20,9 @@
     grid-column-start: 3;
     grid-row-start: 5;
 }
+
+.graficas-container .titulo {
+    font-size: 24px;
+    font-weight: bold;
+    margin-left: 40px;
+}
