@@ -35,7 +35,7 @@
 
 .ant-menu-item {
     display: flex;
-    align-items: center;
+    align-content: center;
     padding: 10px 16px !important; 
 }
 

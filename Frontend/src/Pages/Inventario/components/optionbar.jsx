@@ -1,15 +1,12 @@
 import React from 'react';
-import { Button, Select, Input, message, Modal, Form, List } from 'antd';
+import { Select } from 'antd';
 import './styles/styles.css';
 
-
-const Options = ({ label1,label2, placeholder }) => {
+const Options = ({ label1, label2, placeholder }) => {
     return (
-        <Select className='select'
+        <Select className='SucursalSelect'
             style={{ marginBottom: 20 }}
             placeholder={placeholder}
-            onChange={(value) => {
-            }}
         >
             <Select.Option>
                 {label1}

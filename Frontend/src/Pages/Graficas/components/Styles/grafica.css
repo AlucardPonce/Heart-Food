@@ -19,6 +19,7 @@
 .graficas-container .div3 {
     grid-column-start: 3;
     grid-row-start: 5;
+    align-content: center;
 }
 
 .graficas-container .titulo {
