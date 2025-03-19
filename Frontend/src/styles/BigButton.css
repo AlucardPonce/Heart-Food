@@ -4,13 +4,11 @@
     width: 200px;
     height: 200px;
     margin: 10px;
-    background-color: #437B93;
-    color: white;
+    color: rgb(255, 255, 255);
     border: none;
     border-radius: 10px;
     font-size: 18px;
     cursor: pointer;
-    transition: background-color 0.3s ease;
 }
 
 .big-button:hover {
