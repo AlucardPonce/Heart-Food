@@ -89,6 +89,13 @@
     border: none;
 }
 
+.pro {
+    background-image: url('./pro.png');
+    background-size: cover;
+    background-position: center;
+    border: none;
+}
+
 .big-button:hover {
     background-color: #8bbcc9;
     box-shadow: 0 0 15px rgba(20, 55, 69, 0.6);

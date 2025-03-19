@@ -53,7 +53,7 @@ const Inventario = () => {
                             </tbody>
                         </table>
                     </div>
-                    <div class="div4"><Bto label="Agregar sucursal" ></Bto></div>
+                    <div class="div4"><Bto label="Agregar producto" ></Bto></div>
                 </div>
             </div>
         </div>
