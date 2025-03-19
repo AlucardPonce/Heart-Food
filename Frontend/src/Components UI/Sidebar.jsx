@@ -100,7 +100,7 @@ const Sidebar = () => {
                     <Button key="ok" type="primary" onClick={handleOk}>
                         {modalContent === "Cerrar Sesión" ? "Sí, cerrar sesión" : "Cerrar"}
                     </Button>,
-                    <Button key="cancel" type="" onClick={handleCancel}>{modalContent === "Cerrar Sesión" ? "No, cerrar sesión" : "Cerrar"}</Button>
+                    <Button key="cancel" type="" onClick={handleCancel}>{modalContent === "Cerrar Sesión" ? "Cancelar" : "Cerrar"}</Button>
                 ]}
                 className="custom-modal"
                 closeIcon={null}
