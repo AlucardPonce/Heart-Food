@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { Input, Button, Card, List, Space, Typography, Table, Modal, Form, Divider, message } from "antd";
 import { SearchOutlined, EnvironmentOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import "leaflet/dist/leaflet.css";
+import { getSucursales, saveSucursal, deleteSucursal } from '../../services/interceptor';
 
 // Configuración del icono del marcador
 delete L.Icon.Default.prototype._getIconUrl;
@@ -39,7 +40,6 @@ const reverseGeocode = async (lat, lng) => {
 };
 
 const parseAddressComponents = (displayName, address) => {
-    // Si no hay address, intentamos extraer información del display_name
     if (!address) {
         const parts = displayName.split(',');
         return {
@@ -73,7 +73,7 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
         setTableData(markersData.map((marker, index) => ({
             key: marker.id,
             no: index + 1,
-            nombreSucursal: `Sucursal ${index + 1}`,
+            nombreSucursal: marker.nombreSucursal || `Sucursal ${index + 1}`,
             colonia: marker.colonia,
             municipio: marker.municipio,
             estado: marker.estado,
@@ -116,7 +116,6 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
             const { calle, colonia, municipio, estado, cp } = parseAddressComponents(item.display_name, address);
 
             const newMarker = {
-                id: Date.now(),
                 position: [parseFloat(item.lat), parseFloat(item.lon)],
                 nombreSucursal: `Sucursal ${markers.length + 1}`,
                 calle: calle,
@@ -188,7 +187,6 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
             );
 
             const newMarker = {
-                id: Date.now(),
                 position: [e.latlng.lat, e.latlng.lng],
                 nombreSucursal: `Sucursal ${markers.length + 1}`,
                 calle: calle,
@@ -203,13 +201,15 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
             setMarkers([...markers, newMarker]);
             updateTableData([...markers, newMarker]);
             setActiveMarker(newMarker);
-            form.setFieldsValue(newMarker);
+            form.setFieldsValue({
+                ...newMarker,
+                position: newMarker.position
+            });
             setIsModalVisible(true);
         } catch (error) {
             console.error("Error al obtener detalles de ubicación:", error);
 
             const newMarker = {
-                id: Date.now(),
                 position: [e.latlng.lat, e.latlng.lng],
                 nombreSucursal: `Sucursal ${markers.length + 1}`,
                 calle: "",
@@ -224,7 +224,10 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
             setMarkers([...markers, newMarker]);
             updateTableData([...markers, newMarker]);
             setActiveMarker(newMarker);
-            form.setFieldsValue(newMarker);
+            form.setFieldsValue({
+                ...newMarker,
+                position: newMarker.position
+            });
             setIsModalVisible(true);
         } finally {
             setIsLocationLoading(false);
@@ -321,7 +324,10 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
                             },
                             click: () => {
                                 setActiveMarker(marker);
-                                form.setFieldsValue(marker);
+                                form.setFieldsValue({
+                                    ...marker,
+                                    position: marker.position
+                                });
                                 setIsModalVisible(true);
                             }
                         }}
@@ -362,7 +368,10 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, form,
                                         icon={<EditOutlined />}
                                         onClick={() => {
                                             setActiveMarker(marker);
-                                            form.setFieldsValue(marker);
+                                            form.setFieldsValue({
+                                                ...marker,
+                                                position: marker.position
+                                            });
                                             setIsModalVisible(true);
                                         }}
                                     >
@@ -396,43 +405,33 @@ const Sucursal = () => {
     const [activeMarker, setActiveMarker] = useState(null);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
+    const [loading, setLoading] = useState(true);
 
-    const handleSave = () => {
-        form.validateFields().then(values => {
-            const updatedMarkers = markers.map(marker => {
-                if (marker.id === activeMarker.id) {
-                    return {
-                        ...marker,
-                        ...values,
-                        nombreSucursal: values.nombreSucursal || marker.nombreSucursal
-                    };
-                }
-                return marker;
-            });
+    useEffect(() => {
+        const fetchSucursales = async () => {
+            try {
+                setLoading(true);
+                const sucursales = await getSucursales();
+                const sucursalesFormatted = sucursales.map(sucursal => ({
+                    ...sucursal,
+                    id: sucursal.id,
+                    position: [sucursal.position.lat, sucursal.position.lng]
+                }));
+                setMarkers(sucursalesFormatted);
+                updateTableData(sucursalesFormatted);
+                setLoading(false);
+            } catch (error) {
+                console.error("Error cargando sucursales:", error);
+                message.error("Error al cargar sucursales");
+                setLoading(false);
+            }
+        };
 
-            setMarkers(updatedMarkers);
-            setTableData(updatedMarkers.map((marker, index) => ({
-                key: marker.id,
-                no: index + 1,
-                nombreSucursal: marker.nombreSucursal,
-                colonia: marker.colonia,
-                municipio: marker.municipio,
-                estado: marker.estado,
-                calle: marker.calle,
-                cp: marker.cp,
-                numero: marker.numero,
-                acciones: marker.id
-            })));
+        fetchSucursales();
+    }, []);
 
-            setIsModalVisible(false);
-            message.success("Cambios guardados correctamente");
-        });
-    };
-
-    const handleDelete = (id) => {
-        const updatedMarkers = markers.filter(marker => marker.id !== id);
-        setMarkers(updatedMarkers);
-        setTableData(updatedMarkers.map((marker, index) => ({
+    const updateTableData = (markersData) => {
+        setTableData(markersData.map((marker, index) => ({
             key: marker.id,
             no: index + 1,
             nombreSucursal: marker.nombreSucursal,
@@ -444,7 +443,65 @@ const Sucursal = () => {
             numero: marker.numero,
             acciones: marker.id
         })));
-        message.success("Sucursal eliminada correctamente");
+    };
+
+    const handleSave = async () => {
+        try {
+            const values = await form.validateFields();
+            const sucursalData = {
+                ...values,
+                position: {
+                    lat: values.position[0],
+                    lng: values.position[1]
+                }
+            };
+
+            if (activeMarker?.id) {
+                // Actualizar sucursal existente
+                sucursalData.id = activeMarker.id;
+                const updatedSucursal = await saveSucursal(sucursalData);
+                
+                const updatedMarkers = markers.map(marker => 
+                    marker.id === activeMarker.id ? { 
+                        ...updatedSucursal,
+                        position: [updatedSucursal.position.lat, updatedSucursal.position.lng]
+                    } : marker
+                );
+                
+                setMarkers(updatedMarkers);
+                updateTableData(updatedMarkers);
+                message.success("Sucursal actualizada correctamente");
+            } else {
+                // Crear nueva sucursal
+                const newSucursal = await saveSucursal(sucursalData);
+                const newMarker = {
+                    ...newSucursal,
+                    position: [newSucursal.position.lat, newSucursal.position.lng]
+                };
+                
+                setMarkers([...markers, newMarker]);
+                updateTableData([...markers, newMarker]);
+                message.success("Sucursal creada correctamente");
+            }
+            
+            setIsModalVisible(false);
+        } catch (error) {
+            console.error("Error guardando sucursal:", error);
+            message.error(error.response?.data?.intMessage || "Error al guardar la sucursal");
+        }
+    };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteSucursal(id);
+            const updatedMarkers = markers.filter(marker => marker.id !== id);
+            setMarkers(updatedMarkers);
+            updateTableData(updatedMarkers);
+            message.success("Sucursal eliminada correctamente");
+        } catch (error) {
+            console.error("Error eliminando sucursal:", error);
+            message.error(error.response?.data?.intMessage || "Error al eliminar la sucursal");
+        }
     };
 
     return (
@@ -472,11 +529,14 @@ const Sucursal = () => {
                 gap: 24,
                 maxWidth: '100%'
             }}>
-                <Card style={{
-                    borderRadius: 8,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    overflow: 'hidden'
-                }}>
+                <Card 
+                    style={{
+                        borderRadius: 8,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        overflow: 'hidden'
+                    }}
+                    loading={loading}
+                >
                     <Title level={4} style={{ textAlign: "center", marginBottom: 20 }}>
                         <EnvironmentOutlined /> Mapa de Sucursales
                     </Title>
@@ -490,14 +550,17 @@ const Sucursal = () => {
                     />
                 </Card>
 
-                <Card style={{
-                    borderRadius: 8,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: '500px',
-                    overflow: 'hidden'
-                }}>
+                <Card 
+                    style={{
+                        borderRadius: 8,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: '500px',
+                        overflow: 'hidden'
+                    }}
+                    loading={loading}
+                >
                     <div style={{ flex: 1, overflow: 'auto' }}>
                         <Table
                             dataSource={tableData}
@@ -538,7 +601,10 @@ const Sucursal = () => {
                                                 const marker = markers.find(m => m.id === record.key);
                                                 if (marker) {
                                                     setActiveMarker(marker);
-                                                    form.setFieldsValue(marker);
+                                                    form.setFieldsValue({
+                                                        ...marker,
+                                                        position: marker.position
+                                                    });
                                                     setIsModalVisible(true);
                                                     const mapContainer = document.querySelector('.leaflet-container');
                                                     mapContainer._leaflet_map.flyTo(marker.position, 15);
