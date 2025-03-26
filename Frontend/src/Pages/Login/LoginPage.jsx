@@ -5,7 +5,6 @@ import axios from "axios";
 import "./components/styles/Login.css";
 
 const { Title } = Typography;
-//const base_url = "https://development-iyl1.onrender.com"; //
 const base_url = "http://localhost:3001";
 
 const LoginPage = () => {
@@ -18,14 +17,11 @@ const LoginPage = () => {
         setFormError("");
 
         try {
-            const response = await axios.post(`${base_url}/validate`,
-                values,
-                {
-                    headers: {
-                        "Content-Type": "application/json",
-                    }
-                }
-            );
+            const response = await axios.post(`${base_url}/validate`, values, {
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
 
             if (response.data.statusCode === 200) {
                 message.success("Inicio de sesión exitoso");
