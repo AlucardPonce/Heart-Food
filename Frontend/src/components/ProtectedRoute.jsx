@@ -1,21 +1,14 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { Navigate, Outlet } from "react-router-dom";
 
-const ProtectedRoute = ({ requiredRoles = [] }) => {
-    const { user, loading } = useAuth();
+const ProtectedRoute = () => {
+    const token = localStorage.getItem("token"); // Verifica si hay un token en el localStorage
 
-    if (loading) {
-        return <div>Cargando...</div>; 
-    }
-
-    if (!user) {
+    if (!token) {
+        // Si no hay token, redirige al login
         return <Navigate to="/" replace />;
     }
 
-    if (requiredRoles.length > 0 && !requiredRoles.includes(user.rol)) {
-        return <Navigate to="/home" replace />; 
-    }
-
+    // Si hay token, permite el acceso a la ruta protegida
     return <Outlet />;
 };
 

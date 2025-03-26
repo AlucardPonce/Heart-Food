@@ -40,6 +40,11 @@ const Sidebar = () => {
 
     const handleOk = () => {
         if (modalContent === "Cerrar Sesión") {
+            // Elimina el token y otros datos relacionados con la sesión
+            localStorage.removeItem("token");
+            localStorage.removeItem("role");
+
+            // Redirige al login
             navigate("/");
         } else {
             setIsModalVisible(false);
@@ -100,7 +105,9 @@ const Sidebar = () => {
                     <Button key="ok" type="primary" onClick={handleOk}>
                         {modalContent === "Cerrar Sesión" ? "Sí, cerrar sesión" : "Cerrar"}
                     </Button>,
-                    <Button key="cancel" type="" onClick={handleCancel}>{modalContent === "Cerrar Sesión" ? "Cancelar" : "Cerrar"}</Button>
+                    <Button key="cancel" onClick={handleCancel}>
+                        {modalContent === "Cerrar Sesión" ? "Cancelar" : "Cerrar"}
+                    </Button>,
                 ]}
                 className="custom-modal"
                 closeIcon={null}
@@ -127,4 +134,3 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
-

@@ -1,5 +1,5 @@
 import { Form, Input, Button, Card, Typography, message } from "antd";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth"; // Importamos nuestro hook de autenticación
 import api from "../../services/api"; // Importamos nuestro servicio API configurado
@@ -11,7 +11,14 @@ const LoginPage = () => {
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState("");
     const navigate = useNavigate();
-    const { login } = useAuth(); // Usamos el método login del hook
+    const { user } = useAuth(); // Usamos el estado del usuario del hook
+
+    // Redirige al home si el usuario ya está autenticado
+    useEffect(() => {
+        if (user) {
+            navigate("/home");
+        }
+    }, [user, navigate]);
 
     const onFinish = async (values) => {
         setLoading(true);
@@ -19,11 +26,11 @@ const LoginPage = () => {
 
         try {
             const response = await api.post("/validate", values);
-            
+
             if (response.data.statusCode === 200) {
                 message.success("Inicio de sesión exitoso");
-                login(response.data.data.token); // Usamos el método login del hook
-                navigate("/home");
+                localStorage.setItem("token", response.data.data.token); // Guarda el token en localStorage
+                navigate("/home"); // Redirige al home
             } else {
                 setFormError(response.data.intMessage || "Credenciales incorrectas");
             }
