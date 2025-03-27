@@ -1,15 +1,29 @@
+import { useEffect, useState } from 'react';
 import { Navigate, Outlet } from "react-router-dom";
+import { authService } from '../services/api'; // Importa tu servicio de autenticación
 
 const ProtectedRoute = () => {
-    const token = localStorage.getItem("token"); // Verifica si hay un token en el localStorage
+    const [isAuthenticated, setIsAuthenticated] = useState(null);
 
-    if (!token) {
-        // Si no hay token, redirige al login
-        return <Navigate to="/" replace />;
+    useEffect(() => {
+        // Verificación más completa que solo el token
+        const checkAuth = async () => {
+            const isValid = authService.isAuthenticated();
+            setIsAuthenticated(isValid);
+            
+            if (!isValid) {
+                localStorage.removeItem('token');
+            }
+        };
+        
+        checkAuth();
+    }, []);
+
+    if (isAuthenticated === null) {
+        return <div>Cargando...</div>; // O un spinner
     }
 
-    // Si hay token, permite el acceso a la ruta protegida
-    return <Outlet />;
+    return isAuthenticated ? <Outlet /> : <Navigate to="/" replace />;
 };
 
 export default ProtectedRoute;

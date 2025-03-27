@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Spin, message, Select, Modal, Form, Input, InputNumber } from 'antd';
-import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import './components/styles/styles.css';
 

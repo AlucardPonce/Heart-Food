@@ -37,7 +37,7 @@ try {
 
 const db = admin.firestore();
 
-db.collection('users').limit(1).get()
+db.collection('USERS').limit(1).get()
     .then(() => console.log('✅ Conexión a Firebase establecida correctamente'))
     .catch((err) => console.error('❌ Error al conectar con Firebase:', err));
 
@@ -170,48 +170,70 @@ app.post('/validate', async (req, res) => {
     }
 });
 
-// Endpoint para crear o actualizar sucursal
+// Endpoint para crear/actualizar sucursal (versión mejorada)
 app.post('/sucursales', verifyToken, async (req, res) => {
     try {
-        const { id, ...sucursalData } = req.body;
+        console.log('Iniciando inserción de sucursal...');
+        console.log('Datos recibidos:', req.body);
 
-        // Validación básica
-        if (!sucursalData.nombreSucursal || !sucursalData.position) {
-            return res.status(400).json({ 
-                statusCode: 400, 
-                intMessage: 'Nombre y posición son requeridos' 
+        // Validación reforzada
+        if (!req.body.nombreSucursal || !req.body.latitud || !req.body.longitud) {
+            console.error('Validación fallida:', req.body);
+            return res.status(400).json({
+                success: false,
+                message: 'Datos incompletos',
+                requiredFields: ['nombreSucursal', 'latitud', 'longitud']
             });
         }
 
-        if (id) {
-            // Actualizar sucursal existente
-            await db.collection('SUCURSALES').doc(id).update(sucursalData);
-            return res.status(200).json({ 
-                statusCode: 200, 
-                intMessage: 'Sucursal actualizada correctamente',
-                data: { id }
-            });
-        } else {
-            // Crear nueva sucursal
-            const docRef = await db.collection('SUCURSALES').add(sucursalData);
-            return res.status(201).json({ 
-                statusCode: 201, 
-                intMessage: 'Sucursal creada correctamente',
-                data: { id: docRef.id }
-            });
-        }
+        // Estructura para Firestore
+        const sucursalData = {
+            nombreSucursal: req.body.nombreSucursal,
+            position: {
+                lat: parseFloat(req.body.latitud),
+                lng: parseFloat(req.body.longitud)
+            },
+            direccion: req.body.direccion || '',
+            telefono: req.body.telefono || '',
+            horario: req.body.horario || '9:00 - 18:00',
+            creadoPor: req.user.username,
+            fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'activa'
+        };
+
+        console.log('Datos a insertar:', sucursalData);
+
+        // Operación Firestore
+        const docRef = await db.collection('sucursales').add(sucursalData);
+        console.log('Sucursal creada con ID:', docRef.id);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Sucursal creada exitosamente',
+            data: {
+                id: docRef.id,
+                ...sucursalData
+            }
+        });
+
     } catch (error) {
-        console.error('Error en endpoint /sucursales:', error);
-        return res.status(500).json({ 
-            statusCode: 500, 
-            intMessage: 'Error interno del servidor',
-            error: error.message 
+        console.error('Error crítico:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error en el servidor',
+            errorDetails: {
+                code: error.code,
+                message: error.message,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            }
         });
     }
 });
-
 // Endpoint para obtener todas las sucursales
 app.get('/sucursales', verifyToken, async (req, res) => {
+    console.log('Llegó solicitud a /sucursales'); // Diagnóstico
+    console.log('Headers recibidos:', req.headers); // Verifica el header Authorization
+    
     try {
         const snapshot = await db.collection('SUCURSALES').get();
         const sucursales = [];
@@ -223,13 +245,15 @@ app.get('/sucursales', verifyToken, async (req, res) => {
             });
         });
 
+        console.log('Sucursales encontradas:', sucursales.length); // Diagnóstico
+        
         return res.status(200).json({ 
             statusCode: 200, 
             intMessage: 'Operación exitosa',
             data: sucursales 
         });
     } catch (error) {
-        console.error('Error en endpoint /sucursales:', error);
+        console.error('Error en /sucursales:', error);
         return res.status(500).json({ 
             statusCode: 500, 
             intMessage: 'Error interno del servidor',
@@ -264,155 +288,6 @@ app.delete('/sucursales/:id', verifyToken, async (req, res) => {
         });
     } catch (error) {
         console.error('Error en endpoint DELETE /sucursales:', error);
-        return res.status(500).json({ 
-            statusCode: 500, 
-            intMessage: 'Error interno del servidor',
-            error: error.message 
-        });
-    }
-});
-
-// Endpoint para crear o actualizar producto en inventario
-app.post('/inventario', verifyToken, async (req, res) => {
-    try {
-        const { id, ...productoData } = req.body;
-
-        // Validación básica
-        if (!productoData.sucursalId || !productoData.nombre || !productoData.categoriaId) {
-            return res.status(400).json({ 
-                statusCode: 400, 
-                intMessage: 'Datos incompletos para el producto' 
-            });
-        }
-
-        if (id) {
-            // Actualizar producto existente
-            await db.collection('INVENTARIO').doc(id).update(productoData);
-            return res.status(200).json({ 
-                statusCode: 200, 
-                intMessage: 'Producto actualizado correctamente',
-                data: { id }
-            });
-        } else {
-            // Crear nuevo producto
-            const docRef = await db.collection('INVENTARIO').add(productoData);
-            return res.status(201).json({ 
-                statusCode: 201, 
-                intMessage: 'Producto creado correctamente',
-                data: { id: docRef.id }
-            });
-        }
-    } catch (error) {
-        console.error('Error en endpoint /inventario:', error);
-        return res.status(500).json({ 
-            statusCode: 500, 
-            intMessage: 'Error interno del servidor',
-            error: error.message 
-        });
-    }
-});
-
-// Endpoint para obtener inventario por sucursal
-app.get('/inventario/sucursal/:sucursalId', verifyToken, async (req, res) => {
-    try {
-        const { sucursalId } = req.params;
-        
-        const snapshot = await db.collection('INVENTARIO')
-            .where('sucursalId', '==', sucursalId)
-            .get();
-            
-        const inventario = [];
-        snapshot.forEach(doc => {
-            inventario.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
-
-        return res.status(200).json({ 
-            statusCode: 200, 
-            intMessage: 'Operación exitosa',
-            data: inventario 
-        });
-    } catch (error) {
-        console.error('Error en endpoint /inventario/sucursal:', error);
-        return res.status(500).json({ 
-            statusCode: 500, 
-            intMessage: 'Error interno del servidor',
-            error: error.message 
-        });
-    }
-});
-
-// Endpoint para eliminar producto
-app.delete('/inventario/:id', verifyToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        await db.collection('INVENTARIO').doc(id).delete();
-        
-        return res.status(200).json({ 
-            statusCode: 200, 
-            intMessage: 'Producto eliminado correctamente' 
-        });
-    } catch (error) {
-        console.error('Error en endpoint DELETE /inventario:', error);
-        return res.status(500).json({ 
-            statusCode: 500, 
-            intMessage: 'Error interno del servidor',
-            error: error.message 
-        });
-    }
-});
-
-// Endpoint para obtener todas las categorías
-app.get('/categorias', verifyToken, async (req, res) => {
-    try {
-        const snapshot = await db.collection('CATEGORIAS').get();
-        const categorias = [];
-        
-        snapshot.forEach(doc => {
-            categorias.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
-
-        return res.status(200).json({ 
-            statusCode: 200, 
-            intMessage: 'Operación exitosa',
-            data: categorias 
-        });
-    } catch (error) {
-        console.error('Error en endpoint /categorias:', error);
-        return res.status(500).json({ 
-            statusCode: 500, 
-            intMessage: 'Error interno del servidor',
-            error: error.message 
-        });
-    }
-});
-
-// Endpoint para crear categoría
-app.post('/categorias', verifyToken, async (req, res) => {
-    try {
-        const { nombre } = req.body;
-
-        if (!nombre) {
-            return res.status(400).json({ 
-                statusCode: 400, 
-                intMessage: 'El nombre de la categoría es requerido' 
-            });
-        }
-
-        const docRef = await db.collection('CATEGORIAS').add({ nombre });
-        
-        return res.status(201).json({ 
-            statusCode: 201, 
-            intMessage: 'Categoría creada correctamente',
-            data: { id: docRef.id }
-        });
-    } catch (error) {
-        console.error('Error en endpoint /categorias:', error);
         return res.status(500).json({ 
             statusCode: 500, 
             intMessage: 'Error interno del servidor',

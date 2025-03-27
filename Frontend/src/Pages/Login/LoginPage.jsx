@@ -1,8 +1,7 @@
 import { Form, Input, Button, Card, Typography, message } from "antd";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../hooks/useAuth"; // Importamos nuestro hook de autenticación
-import api from "../../services/api"; // Importamos nuestro servicio API configurado
+import api, { authService } from "../../services/api";
 import "./components/styles/Login.css";
 
 const { Title } = Typography;
@@ -11,34 +10,40 @@ const LoginPage = () => {
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState("");
     const navigate = useNavigate();
-    const { user } = useAuth(); // Usamos el estado del usuario del hook
 
-    // Redirige al home si el usuario ya está autenticado
     useEffect(() => {
-        if (user) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+    }, []);
+
+    useEffect(() => {
+        if (authService.isAuthenticated()) {
             navigate("/home");
         }
-    }, [user, navigate]);
+    }, [navigate]);
 
     const onFinish = async (values) => {
         setLoading(true);
         setFormError("");
 
         try {
-            const response = await api.post("/validate", values);
+            const response = await api.post("/validate", values, {
+                skipAuth: true // Opcional: si has implementado esta opción
+            });
 
             if (response.data.statusCode === 200) {
                 message.success("Inicio de sesión exitoso");
-                localStorage.setItem("token", response.data.data.token); // Guarda el token en localStorage
-                navigate("/home"); // Redirige al home
-            } else {
-                setFormError(response.data.intMessage || "Credenciales incorrectas");
+                authService.login(
+                    response.data.data.token,
+                    response.data.data.user
+                );
+                navigate("/home");
             }
         } catch (error) {
-            const errorMessage = error.response?.data?.intMessage || "Error en la autenticación";
-            setFormError(errorMessage);
-            message.error(errorMessage);
-            console.error("Error en login:", error);
+            const errorMsg = error.response?.data?.intMessage ||
+                "Error de conexión. Intente nuevamente.";
+            setFormError(errorMsg);
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -46,20 +51,18 @@ const LoginPage = () => {
 
     return (
         <div className="container-login">
-            <Card className="card-login" bordered={false}>
+            <Card className="card-login" variant={false}>
                 <Title level={2} className="center-login">Iniciar Sesión</Title>
 
                 <Form
                     layout="vertical"
                     onFinish={onFinish}
-                    initialValues={{ remember: true }}
                 >
                     <Form.Item
                         label="Usuario"
                         name="username"
-                        rules={[{ required: true, message: "Por favor, ingrese su usuario" }]}
+                        rules={[{ required: true, message: "Ingrese su usuario" }]}
                         validateStatus={formError ? "error" : ""}
-                        help={formError && formError}
                     >
                         <Input placeholder="Usuario" autoFocus />
                     </Form.Item>
@@ -69,11 +72,17 @@ const LoginPage = () => {
                         name="password"
                         rules={[
                             { required: true, message: "Ingrese su contraseña" },
-                            { min: 6, message: "Debe tener al menos 6 caracteres" },
+                            { min: 6, message: "Mínimo 6 caracteres" },
                         ]}
                     >
                         <Input.Password placeholder="Contraseña" />
                     </Form.Item>
+
+                    {formError && (
+                        <div className="error-message" style={{ color: 'red', marginBottom: 16 }}>
+                            {formError}
+                        </div>
+                    )}
 
                     <Form.Item>
                         <Button
@@ -82,7 +91,6 @@ const LoginPage = () => {
                             block
                             loading={loading}
                             className="button-login"
-                            disabled={loading}
                         >
                             Iniciar Sesión
                         </Button>
