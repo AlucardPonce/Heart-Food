@@ -1,150 +1,142 @@
-import React, { useState, useEffect } from "react";
-import { Form, Input, Button, message, Card } from "antd";
-import axios from "axios";
-import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from 'react-simple-captcha';
+import { Form, Input, Button, Card, Typography, message } from "antd";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
-const API_URL = "http://localhost:3001";
+const { Title } = Typography;
 
 const LoginPage = () => {
     const [loading, setLoading] = useState(false);
-    const [captchaInput, setCaptchaInput] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [code, setCode] = useState("");
-    const [step, setStep] = useState("login"); // 'login' o 'verify'
+    const [formError, setFormError] = useState("");
     const navigate = useNavigate();
 
-    useEffect(() => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("role");
-        loadCaptchaEnginge(6);
-    }, []);
+    const API_URL = "http//localhost:3001";
 
     const onFinish = async (values) => {
-        if (!validateCaptcha(captchaInput)) {
-            message.error("Captcha incorrecto, por favor intenta de nuevo");
-            return;
-        }
-
         setLoading(true);
-        try {
-            const response = await axios.post(`${API_URL}/login`, {
-                email: values.email,
-                password: values.password,
-            });
+        setFormError("");
 
-            if (response.data.message === "Código de verificación enviado") {
-                setEmail(values.email);
-                setPassword(values.password);
-                setStep("verify");
-                message.success("Código de verificación enviado");
+        try {
+            const response = await axios.post(`${API_URL}/validate`,
+                values,  // Aquí envías directamente el objeto de formulario
+                {
+                    headers: {
+                        "Content-Type": "application/json",  // Especificamos el tipo de contenido
+                    }
+                }
+            );
+
+            if (response.data.statusCode === 200) {
+                message.success("Inicio de sesión exitoso");
+                localStorage.setItem("token", response.data.data.token); // Almacenar el token recibido en el localStorage
+                navigate("/dashboard"); // Redirigir al dashboard
+            } else {
+                setFormError("Credenciales incorrectas");
             }
         } catch (error) {
-            const errorMessage = error.response?.data?.message || "Error en el inicio de sesión";
-            message.error(errorMessage);
-        }
-        setLoading(false);
-    };
-
-    const handleVerify = async () => {
-        setLoading(true);
-        try {
-            const response = await axios.post(`${API_URL}/verify`, {
-                email,
-                code,
-            });
-
-            const { token, role } = response.data;
-            localStorage.setItem("token", token);
-            localStorage.setItem("role", role);
-            message.success("Inicio de sesión exitoso");
-            navigate("/home");
-        } catch (error) {
-            const errorMessage = error.response?.data?.message || "Error al verificar el código";
-            message.error(errorMessage);
-        }
-        setLoading(false);
-    };
-
-    const handleResetPassword = async () => {
-        const email = prompt("Ingresa tu correo para restablecer la contraseña:");
-        if (email) {
-            try {
-                await axios.post(`${API_URL}/reset-password`, { email });
-                message.success("Correo de recuperación enviado");
-            } catch (error) {
-                const resetErrorMessage = error.response?.data?.message || "No se pudo enviar el correo";
-                message.error(resetErrorMessage);
-            }
+            setFormError("Error en la autenticación");
+            console.error(error);
+        } finally {
+            setLoading(false);
         }
     };
+
+    useEffect(() => {
+        document.body.style.margin = "0";
+        document.documentElement.style.height = "100%";
+        document.body.style.height = "100%";
+    }, []);
 
     return (
-        <Card title="Iniciar Sesión" style={{ width: 400, margin: "50px auto" }}>
-            {step === "login" ? (
+        <div style={styles.container}>
+            <Card style={styles.card} variant={false}>
+                <Title level={2} style={{ textAlign: "center", color: "#333" }}>
+                    Iniciar Sesión
+                </Title>
+
                 <Form layout="vertical" onFinish={onFinish}>
                     <Form.Item
-                        label="Correo Electrónico"
-                        name="email"
-                        rules={[{ required: true, message: "Por favor ingresa tu correo" }, { type: "email", message: "Correo inválido" }]}
+                        label="Usuario"
+                        name="username"
+                        rules={[{ required: true, message: "Por favor, ingrese su usuario" }]}
+                        validateStatus={formError ? "error" : ""}
+                        help={formError && formError}
                     >
-                        <Input />
+                        <Input placeholder="Usuario" />
                     </Form.Item>
 
                     <Form.Item
                         label="Contraseña"
                         name="password"
-                        rules={[{ required: true, message: "Por favor ingresa tu contraseña" }]}
+                        rules={[
+                            { required: true, message: "Ingrese su contraseña" },
+                            { min: 6, message: "Debe tener al menos 6 caracteres" },
+                        ]}
+                        validateStatus={formError ? "error" : ""}
+                        help={formError && formError}
                     >
-                        <Input.Password />
-                    </Form.Item>
-
-                    <Form.Item label="Captcha">
-                        <LoadCanvasTemplate reloadText="Recargar" />
-                        <Input
-                            placeholder="Ingresa el captcha"
-                            value={captchaInput}
-                            onChange={(e) => setCaptchaInput(e.target.value)}
-                        />
+                        <Input.Password placeholder="Contraseña" />
                     </Form.Item>
 
                     <Form.Item>
-                        <Button type="primary" htmlType="submit" loading={loading} block>
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            block
+                            loading={loading}
+                            style={styles.button}
+                        >
                             Iniciar Sesión
                         </Button>
                     </Form.Item>
-
-                    <Button type="link" onClick={handleResetPassword}>
-                        ¿Olvidaste tu contraseña?
-                    </Button>
                 </Form>
-            ) : (
-                <div>
-                    <h2>Verificar Código</h2>
-                    <div style={{ padding: "10px" }}>
-                        <Input
-                            style={{ padding: "10px" }}
-                            placeholder="Código de verificación"
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                        />
-                    </div>
-                    <div>
+                <div style={styles.center}>
+                    <p>
+                        ¿Aún no tienes cuenta?
                         <Button
-                            style={{ padding: "10px" }}
-                            type="primary"
-                            onClick={handleVerify}
-                            loading={loading}
-                            block
+                            type="link"
+                            onClick={() => navigate("/register")}
+                            style={{ padding: 0, fontSize: "14px" }}
                         >
-                            Verificar
+                            Registrar aquí
                         </Button>
-                    </div>
+                    </p>
                 </div>
-            )}
-        </Card>
+            </Card>
+        </div>
     );
+};
+
+const styles = {
+    container: {
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #667eea, #764ba2)",
+    },
+    card: {
+        width: 380,
+        padding: 20,
+        borderRadius: 10,
+        boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.3)",
+        background: "#fff",
+    },
+    button: {
+        backgroundColor: "#1890ff",
+        borderColor: "#1890ff",
+        fontSize: "16px",
+    },
+    errorMessage: {
+        color: "#f5222d",
+        marginBottom: "10px",
+        fontSize: "14px",
+        textAlign: "center",
+    },
+    center: {
+        textAlign: "center",
+        marginTop: "10px",
+    },
 };
 
 export default LoginPage;
