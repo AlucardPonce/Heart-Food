@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const { validateUser, registerUser, verifyToken } = require("./UserCtl");
+const { validateUser, registerUser, verifyToken } = require("./CTL/UserCtl");
 
 const app = express();
 app.use(express.json());

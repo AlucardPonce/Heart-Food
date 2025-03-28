@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const db = require("./DB_connection");
+const db = require("../DB/DB_connection");
 
 const SECRET_KEY = process.env.JWT_SECRET || "supersecret";
 

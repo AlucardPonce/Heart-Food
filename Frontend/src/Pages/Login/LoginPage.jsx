@@ -10,7 +10,11 @@ const LoginPage = () => {
     const [formError, setFormError] = useState("");
     const navigate = useNavigate();
 
-    const API_URL = "http//localhost:3001";
+    const API_URL = "http://localhost:3001";
+
+    useEffect(() => {
+        localStorage.removeItem("token");
+    }, []);
 
     const onFinish = async (values) => {
         setLoading(true);
@@ -18,18 +22,18 @@ const LoginPage = () => {
 
         try {
             const response = await axios.post(`${API_URL}/validate`,
-                values,  // Aquí envías directamente el objeto de formulario
+                values,
                 {
                     headers: {
-                        "Content-Type": "application/json",  // Especificamos el tipo de contenido
+                        "Content-Type": "application/json",
                     }
                 }
             );
 
             if (response.data.statusCode === 200) {
                 message.success("Inicio de sesión exitoso");
-                localStorage.setItem("token", response.data.data.token); // Almacenar el token recibido en el localStorage
-                navigate("/dashboard"); // Redirigir al dashboard
+                localStorage.setItem("token", response.data.data.token);
+                navigate("/home"); 
             } else {
                 setFormError("Credenciales incorrectas");
             }

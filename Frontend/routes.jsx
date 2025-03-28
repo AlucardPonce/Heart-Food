@@ -6,17 +6,57 @@ import Graficas from './src/Pages/Graficas/Graficas';
 import Producto from './src/Pages/ProductoVenta/ProductoVenta';
 import Inventario from './src/Pages/Inventario/Inventario';
 import Sucursal from './src/Pages/Sucursales/Sucursal';
+import ProtectedRoute from './src/components/ProtectedRoute'; // Importar el componente de protección
 
 const AppRoutes = () => {
     return (
         <Routes>
+            {/* Ruta pública */}
             <Route path="/" element={<Login />} />
-            <Route path="/home" element={<MainLayout />}>
+            <Route path="/login" element={<Login />} />
+
+            {/* Rutas protegidas */}
+            <Route
+                path="/home"
+                element={
+                    <ProtectedRoute>
+                        <MainLayout />
+                    </ProtectedRoute>
+                }
+            >
                 <Route index element={<HomePage />} />
-                <Route path="graficas" element={<Graficas />} />
-                <Route path="producto" element={<Producto />} />
-                <Route path="inventario" element={<Inventario />} />
-                <Route path="sucursales" element={<Sucursal />} />
+                <Route
+                    path="graficas"
+                    element={
+                        <ProtectedRoute>
+                            <Graficas />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="producto"
+                    element={
+                        <ProtectedRoute>
+                            <Producto />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="inventario"
+                    element={
+                        <ProtectedRoute>
+                            <Inventario />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="sucursales"
+                    element={
+                        <ProtectedRoute>
+                            <Sucursal />
+                        </ProtectedRoute>
+                    }
+                />
             </Route>
         </Routes>
     );
