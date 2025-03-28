@@ -10,7 +10,7 @@ const MainLayout = () => {
         <div>
             <Navbar />
             <Sidebar />
-            <main style={{ padding: '80px' }}>
+            <main style={{ marginLeft:"80", marginTop:"80" }}>
                 <Outlet />
             </main>
             <Footer />
