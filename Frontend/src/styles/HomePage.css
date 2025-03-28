@@ -4,7 +4,7 @@
 }
 
 .content {
-    margin-left: 80px; /* Ancho del Sidebar colapsado */
+    margin-left: 10px; /* Ancho del Sidebar colapsado */
     padding: 20px;
     transition: margin-left 0.3s ease;
     flex: 1;

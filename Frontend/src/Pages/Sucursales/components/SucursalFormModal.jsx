@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Form, Input, Typography } from 'antd';
+import axios from 'axios';
 
 const { Text } = Typography;
 
@@ -20,7 +21,21 @@ const SucursalFormModal = ({ isModalVisible, setIsModalVisible, activeMarker, ha
     const onFinish = async () => {
         try {
             const values = await form.validateFields();
-            handleSave(values);
+            const payload = {
+                ...values,
+                position: {
+                    lat: values.position[0],
+                    lng: values.position[1]
+                }
+            };
+
+            // Ahora todas las solicitudes son por POST y con JSON en el body
+            await axios.post('/api/sucursales', payload, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            handleSave(payload);
+            setIsModalVisible(false);
         } catch (error) {
             console.error("Validation error:", error);
         }

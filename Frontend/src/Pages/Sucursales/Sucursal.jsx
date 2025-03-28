@@ -4,6 +4,7 @@ import { EnvironmentOutlined } from '@ant-design/icons';
 import MapComponent from './components/MapComponent';
 import SucursalesTable from './components/SucursalesTable';
 import SucursalFormModal from './components/SucursalFormModal';
+import api from '../../services/interceptor';
 
 const { Title } = Typography;
 
@@ -14,11 +15,10 @@ const Sucursal = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // Función para obtener sucursales
     const fetchSucursales = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/sucursales');
+            const response = await api.post('/sucursales/listar', {});
             const sucursales = response.data.data || [];
             
             const sucursalesFormatted = sucursales.map(sucursal => ({
@@ -37,12 +37,10 @@ const Sucursal = () => {
         }
     };
 
-    // Función para guardar sucursal
     const handleSaveSucursal = async (sucursalData) => {
         try {
-            const response = sucursalData.id 
-                ? await api.put(`/sucursales/${sucursalData.id}`, sucursalData)
-                : await api.post('/sucursales', sucursalData);
+            const endpoint = sucursalData.id ? '/sucursales/actualizar' : '/sucursales/crear';
+            const response = await api.post(endpoint, { ...sucursalData });
             return response.data;
         } catch (error) {
             console.error("Error guardando sucursal:", error);
@@ -107,7 +105,7 @@ const Sucursal = () => {
     const handleDelete = async (id) => {
         try {
             setLoading(true);
-            await api.delete(`/sucursales/${id}`);
+            await api.post('/sucursales/eliminar', { id });
             const updatedMarkers = markers.filter(marker => marker.id !== id);
             setMarkers(updatedMarkers);
             updateTableData(updatedMarkers);
