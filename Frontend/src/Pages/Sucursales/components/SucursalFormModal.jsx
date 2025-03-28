@@ -1,10 +1,10 @@
 import React from 'react';
-import { Modal, Form, Input, Typography } from 'antd';
-import axios from 'axios';
+import { Modal, Form, Input, Typography, message } from 'antd';
+import api from '../../../services/interceptor'; // Importa tu interceptor configurado
 
 const { Text } = Typography;
 
-const SucursalFormModal = ({ isModalVisible, setIsModalVisible, activeMarker, handleSave }) => {
+const SucursalFormModal = ({ isModalVisible, setIsModalVisible, activeMarker, handleSave, markers, setMarkers }) => {
     const [form] = Form.useForm();
 
     React.useEffect(() => {
@@ -29,15 +29,22 @@ const SucursalFormModal = ({ isModalVisible, setIsModalVisible, activeMarker, ha
                 }
             };
 
-            // Ahora todas las solicitudes son por POST y con JSON en el body
-            await axios.post('/api/sucursales', payload, {
-                headers: { 'Content-Type': 'application/json' }
-            });
+            // Usa el interceptor para enviar la solicitud
+            const response = await api.post('/sucursales', payload);
 
-            handleSave(payload);
+            // Actualiza el estado de las sucursales
+            const newSucursal = {
+                ...payload,
+                id: response.data.data.id, // Asegúrate de que el backend devuelva el ID
+            };
+            setMarkers([...markers, newSucursal]); // Agrega la nueva sucursal al estado
+
+            message.success('Sucursal guardada correctamente');
+            handleSave(newSucursal); // Llama a la función de guardado si es necesario
             setIsModalVisible(false);
         } catch (error) {
-            console.error("Validation error:", error);
+            console.error("Error al guardar la sucursal:", error);
+            message.error(error.response?.data?.message || 'Error al guardar la sucursal');
         }
     };
 

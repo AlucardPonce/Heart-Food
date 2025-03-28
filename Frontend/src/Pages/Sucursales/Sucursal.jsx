@@ -18,7 +18,7 @@ const Sucursal = () => {
     const fetchSucursales = async () => {
         try {
             setLoading(true);
-            const response = await api.post('/sucursales/listar', {});
+            const response = await api.get('/sucursales'); // Cambiado a GET
             const sucursales = response.data.data || [];
             
             const sucursalesFormatted = sucursales.map(sucursal => ({
@@ -39,8 +39,9 @@ const Sucursal = () => {
 
     const handleSaveSucursal = async (sucursalData) => {
         try {
-            const endpoint = sucursalData.id ? '/sucursales/actualizar' : '/sucursales/crear';
-            const response = await api.post(endpoint, { ...sucursalData });
+            const endpoint = sucursalData.id ? '/sucursales' : '/sucursales';
+            const method = sucursalData.id ? 'put' : 'post'; // PUT para actualizar, POST para crear
+            const response = await api[method](endpoint, sucursalData);
             return response.data;
         } catch (error) {
             console.error("Error guardando sucursal:", error);
@@ -105,7 +106,7 @@ const Sucursal = () => {
     const handleDelete = async (id) => {
         try {
             setLoading(true);
-            await api.post('/sucursales/eliminar', { id });
+            await api.delete(`/sucursales`); // Cambiado a DELETE
             const updatedMarkers = markers.filter(marker => marker.id !== id);
             setMarkers(updatedMarkers);
             updateTableData(updatedMarkers);
