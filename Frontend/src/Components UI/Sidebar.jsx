@@ -25,7 +25,6 @@ const Sidebar = () => {
     const handleMenuClick = (e) => {
         const modals = {
             1: "Perfil",
-            2: "Notificaciones",
             3: "Contacto",
             4: "Configuraciones",
             5: "Cerrar Sesión",
@@ -66,11 +65,6 @@ const Sidebar = () => {
                             key: "1",
                             icon: <UserOutlined />,
                             label: "Perfil",
-                        },
-                        {
-                            key: "2",
-                            icon: <NotificationOutlined />,
-                            label: "Notificaciones",
                         },
                         {
                             key: "3",
