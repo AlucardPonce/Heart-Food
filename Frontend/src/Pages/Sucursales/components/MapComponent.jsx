@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from 'leaflet';
-import { Input, Button, Card, List, Space, Typography, Divider, message } from "antd";
-import { SearchOutlined, EnvironmentOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Input, Button, Space, Typography, Divider, message } from "antd";
+import { SearchOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import "leaflet/dist/leaflet.css";
-import { reverseGeocode, parseAddressComponents } from './utils';
+import api from '../../../services/interceptor';
 
 const { Text, Title } = Typography;
 
@@ -16,221 +16,111 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-const MapClickHandler = ({ onClick }) => {
-    useMapEvents({
-        click(e) {
-            onClick(e);
-        },
-    });
-    return null;
-};
+const MapComponent = ({ markers, setMarkers, setTableData, setActiveMarker, setIsModalVisible }) => {
 
-const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, setIsModalVisible }) => {
     const [searchQuery, setSearchQuery] = useState("");
-    const [suggestions, setSuggestions] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [isLocationLoading, setIsLocationLoading] = useState(false);
     const mapRef = useRef();
 
-    const handleSearch = async () => {
-        if (!searchQuery) return;
-        setLoading(true);
-        setSuggestions([]);
-
-        try {
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`;
-            const response = await fetch(url);
-            const data = await response.json();
-            setSuggestions(data);
-
-            if (data.length > 0) {
-                const firstResult = data[0];
-                mapRef.current.flyTo([parseFloat(firstResult.lat), parseFloat(firstResult.lon)], 15);
-            }
-        } catch (error) {
-            console.error("Error fetching location data:", error);
-            message.error("Error al buscar la ubicación");
-        } finally {
-            setLoading(false);
+    const handleMapClick = (e) => {
+        // Verificar que el clic no sea en un marcador existente
+        if (e.originalEvent.target.tagName === 'DIV' || e.originalEvent.target.tagName === 'IMG') {
+            return;
         }
+
+        const newMarker = {
+            id: `temp-${Date.now()}`,
+            nombreSucursal: "Nueva Sucursal",
+            position: [e.latlng.lat, e.latlng.lng],
+            calle: "",
+            colonia: "",
+            municipio: "",
+            estado: "",
+            cp: "",
+            numero: "",
+        };
+
+        setMarkers(prevMarkers => [...(prevMarkers || []), newMarker]);
+        setTableData(prevData => [...(prevData || []), newMarker]);
+        setActiveMarker(newMarker);
+        setIsModalVisible(true);
     };
 
-    const handleSelectLocation = async (item) => {
+    // Actualizar la ubicación en la base de datos al arrastrar el pin
+    const handleMarkerDrag = async (id, newPosition) => {
         try {
-            setIsLocationLoading(true);
-            const geocodeData = await reverseGeocode(parseFloat(item.lat), parseFloat(item.lon));
-            const address = geocodeData?.address || {};
-
-            const { calle, colonia, municipio, estado, cp } = parseAddressComponents(item.display_name, address);
-
-            const newMarker = {
-                position: [parseFloat(item.lat), parseFloat(item.lon)],
-                nombreSucursal: `Sucursal ${markers.length + 1}`,
-                calle: calle,
-                colonia: colonia,
-                municipio: municipio,
-                estado: estado,
-                cp: cp,
-                numero: address.house_number || "",
-                direccion: item.display_name
+            const payload = {
+                id,
+                position: {
+                    lat: newPosition[0],
+                    lng: newPosition[1],
+                },
             };
 
-            setMarkers([...markers, newMarker]);
-            setTableData([...markers, newMarker]);
-            setSuggestions([]);
-            setSearchQuery(calle);
-            mapRef.current.flyTo(newMarker.position, 15);
-        } catch (error) {
-            console.error("Error al obtener detalles de la ubicación:", error);
-            message.error("Error al procesar la ubicación seleccionada");
-        } finally {
-            setIsLocationLoading(false);
-        }
-    };
+            await api.post('/sucursales/update', payload);
 
-    const handleMarkerDrag = async (id, newPosition) => {
-        setIsLocationLoading(true);
-        try {
-            const geocodeData = await reverseGeocode(newPosition[0], newPosition[1]);
-            const address = geocodeData?.address || {};
-            const { calle, colonia, municipio, estado, cp } = parseAddressComponents(
-                geocodeData?.display_name || "Nueva ubicación",
-                address
+            const updatedMarkers = markers.map(marker =>
+                marker.id === id ? { ...marker, position: newPosition } : marker
             );
-
-            const updatedMarkers = markers.map(marker => {
-                if (marker.id === id) {
-                    return {
-                        ...marker,
-                        position: newPosition,
-                        calle: calle,
-                        colonia: colonia,
-                        municipio: municipio,
-                        estado: estado,
-                        cp: cp,
-                        numero: address.house_number || marker.numero,
-                        direccion: geocodeData?.display_name || marker.direccion
-                    };
-                }
-                return marker;
-            });
 
             setMarkers(updatedMarkers);
             setTableData(updatedMarkers);
+            message.success("Ubicación actualizada correctamente");
         } catch (error) {
-            console.error("Error updating marker location:", error);
-        } finally {
-            setIsLocationLoading(false);
+            console.error("Error al actualizar la ubicación:", error);
+            message.error("Error al actualizar la ubicación");
         }
     };
 
-    const handleMapClick = async (e) => {
-        setIsLocationLoading(true);
+    // Eliminar un pin y actualizar los nombres de los pines
+    const handleDeleteMarker = async (id) => {
         try {
-            const geocodeData = await reverseGeocode(e.latlng.lat, e.latlng.lng);
-            const address = geocodeData?.address || {};
-            const { calle, colonia, municipio, estado, cp } = parseAddressComponents(
-                geocodeData?.display_name || "Nueva ubicación",
-                address
-            );
+            await api.post('/sucursales/delete', { id });
 
-            const newMarker = {
-                position: [e.latlng.lat, e.latlng.lng],
-                nombreSucursal: `Sucursal ${markers.length + 1}`,
-                calle: calle,
-                colonia: colonia,
-                municipio: municipio,
-                estado: estado,
-                cp: cp,
-                numero: address.house_number || "",
-                direccion: geocodeData?.display_name || "Nueva ubicación"
-            };
-
-            setActiveMarker(newMarker);
-            setIsModalVisible(true);
+            const updatedMarkers = markers.filter(marker => marker.id !== id);
+            setMarkers(updatedMarkers);
+            setTableData(updatedMarkers);
+            message.success("Sucursal eliminada correctamente");
         } catch (error) {
-            console.error("Error al obtener detalles de ubicación:", error);
+            console.error("Error al eliminar la sucursal:", error);
+            message.error("Error al eliminar la sucursal");
+        }
+    };
 
-            const newMarker = {
-                position: [e.latlng.lat, e.latlng.lng],
-                nombreSucursal: `Sucursal ${markers.length + 1}`,
-                calle: "",
-                colonia: "",
-                municipio: "",
-                estado: "",
-                cp: "",
-                numero: "",
-                direccion: "Nueva ubicación"
-            };
+    const onFinish = async (values) => {
+        try {
+            // Asegúrate de que markers sea un array válido
+            if (!Array.isArray(markers)) {
+                throw new Error("El estado markers no es un array válido.");
+            }
 
-            setActiveMarker(newMarker);
-            setIsModalVisible(true);
-        } finally {
-            setIsLocationLoading(false);
+            await handleSave(values); // Llama a la función handleSave del componente padre
+        } catch (error) {
+            console.error("Error al guardar la sucursal:", error);
+            message.error("Error al guardar la sucursal");
         }
     };
 
     return (
         <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-            <Space.Compact style={{ width: "100%", marginBottom: 16 }}>
+            <Space style={{ width: "100%", marginBottom: 16 }}>
                 <Input
                     placeholder="Buscar dirección, ciudad o lugar..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    onPressEnter={handleSearch}
                     allowClear
                     style={{ height: 40 }}
                 />
                 <Button
                     type="primary"
                     icon={<SearchOutlined />}
-                    onClick={handleSearch}
-                    loading={loading}
                     style={{ height: 40 }}
                 >
                     Buscar
                 </Button>
-            </Space.Compact>
-
-            {suggestions.length > 0 && (
-                <Card
-                    style={{
-                        marginBottom: 16,
-                        borderRadius: 8,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        maxHeight: '300px',
-                        overflow: 'auto'
-                    }}
-                >
-                    <List
-                        size="small"
-                        dataSource={suggestions}
-                        renderItem={(item) => (
-                            <List.Item
-                                onClick={() => handleSelectLocation(item)}
-                                style={{
-                                    cursor: "pointer",
-                                    padding: "8px 16px",
-                                    transition: 'background-color 0.3s',
-                                    ':hover': {
-                                        backgroundColor: '#f5f5f5'
-                                    }
-                                }}
-                            >
-                                <div>
-                                    <Text strong>{item.display_name.split(",")[0]}</Text>
-                                    <Text type="secondary" style={{ display: "block" }}>
-                                        {item.display_name.split(",").slice(1).join(",").trim()}
-                                    </Text>
-                                </div>
-                            </List.Item>
-                        )}
-                    />
-                </Card>
-            )}
+            </Space>
 
             <MapContainer
-                center={[19.4326, -99.1332]}
+                center={[19.4326, -99.1332]} // Coordenadas iniciales
                 zoom={5}
                 style={{
                     height: "400px",
@@ -240,14 +130,12 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, setIs
                     border: '1px solid #f0f0f0'
                 }}
                 whenCreated={(map) => { mapRef.current = map; }}
+                onClick={handleMapClick} // Configura el evento onClick
             >
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
-
-                <MapClickHandler onClick={handleMapClick} />
-
                 {markers.map(marker => (
                     <Marker
                         key={marker.id}
@@ -308,11 +196,7 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, setIs
                                     <Button
                                         size="small"
                                         icon={<DeleteOutlined />}
-                                        onClick={() => {
-                                            const updatedMarkers = markers.filter(m => m.id !== marker.id);
-                                            setMarkers(updatedMarkers);
-                                            setTableData(updatedMarkers);
-                                        }}
+                                        onClick={() => handleDeleteMarker(marker.id)}
                                         danger
                                     >
                                         Eliminar
@@ -327,4 +211,4 @@ const EditableMap = ({ markers, setMarkers, setTableData, setActiveMarker, setIs
     );
 };
 
-export default EditableMap;
+export default MapComponent;
