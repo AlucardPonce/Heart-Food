@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, message, Card, Space, Typography, Tag, Popconfirm, Divider, Tabs } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, TagsOutlined } from '@ant-design/icons';
-import apiClient from '../../services/interceptor'; // Asegúrate de que la ruta sea correcta
+import { 
+  Table, Button, Modal, Form, Input, InputNumber, Select, 
+  message, Card, Space, Typography, Tag, Popconfirm, 
+  Divider, Tabs, Dropdown, Menu, Switch, Upload, Image 
+} from 'antd';
+import { 
+  PlusOutlined, EditOutlined, DeleteOutlined, 
+  SearchOutlined, ReloadOutlined, TagsOutlined,
+  MoreOutlined, CheckOutlined, CloseOutlined, UploadOutlined
+} from '@ant-design/icons';
+import apiClient from '../../services/interceptor';
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -20,6 +28,19 @@ const Inventario = () => {
     const [categoriaModalVisible, setCategoriaModalVisible] = useState(false);
     const [formCategoria] = Form.useForm();
     const [activeTab, setActiveTab] = useState('1');
+
+    // Configuración para subida de imágenes
+    const beforeUpload = (file) => {
+        const isImage = file.type.startsWith('image/');
+        if (!isImage) {
+            message.error('Solo puedes subir archivos de imagen!');
+        }
+        const isLt5M = file.size / 1024 / 1024 < 5;
+        if (!isLt5M) {
+            message.error('La imagen debe ser menor a 5MB!');
+        }
+        return isImage && isLt5M;
+    };
 
     // Obtener productos
     const fetchProductos = async () => {
@@ -62,45 +83,117 @@ const Inventario = () => {
         }
     };
 
-    // Operaciones CRUD para productos
+    // Crear producto
     const handleCreateProducto = async (values) => {
         try {
-            const response = await apiClient.post('/productos', values);
+            const formData = new FormData();
+            
+            // Agregar todos los campos del formulario
+            Object.keys(values).forEach(key => {
+                if (key === 'imagen' && values[key]?.[0]?.originFileObj) {
+                    formData.append('imagen', values.imagen[0].originFileObj);
+                } else if (key !== 'imagen') {
+                    formData.append(key, values[key]);
+                }
+            });
+
+            const response = await apiClient.post('/productos', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            
             message.success('Producto creado exitosamente');
             fetchProductos();
             setProductoModalVisible(false);
             formProducto.resetFields();
         } catch (error) {
-            message.error('Error al crear el producto');
+            if (error.response?.status === 400 && error.response?.data?.message.includes('imagen')) {
+                message.error('Error al subir la imagen: ' + error.response.data.message);
+            } else {
+                message.error(error.response?.data?.message || 'Error al crear el producto');
+            }
         }
     };
 
+    // Actualizar producto
     const handleUpdateProducto = async (values) => {
         try {
-            await apiClient.post('/productos/update', { ...values, id: editingId });
+            const formData = new FormData();
+            
+            // Agregar todos los campos del formulario
+            Object.keys(values).forEach(key => {
+                if (key === 'imagen' && values[key]?.[0]?.originFileObj) {
+                    formData.append('imagen', values.imagen[0].originFileObj);
+                } else if (key !== 'imagen') {
+                    formData.append(key, values[key]);
+                }
+            });
+            
+            formData.append('id', editingId);
+            
+            // Incluir la URL anterior para eliminación si es necesario
+            if (values.imagenUrlAnterior) {
+                formData.append('imagenUrlAnterior', values.imagenUrlAnterior);
+            }
+
+            await apiClient.post('/productos/update', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            
             message.success('Producto actualizado exitosamente');
             fetchProductos();
             setProductoModalVisible(false);
             formProducto.resetFields();
             setEditingId(null);
         } catch (error) {
-            message.error('Error al actualizar el producto');
+            message.error(error.response?.data?.message || 'Error al actualizar el producto');
         }
     };
 
-    const handleDeleteProducto = async (id) => {
+    // Eliminación permanente
+    const handleDeletePermanente = async (id) => {
+        Modal.confirm({
+            title: '¿Eliminar permanentemente este producto?',
+            content: 'Esta acción no se puede deshacer y borrará todos los registros del producto',
+            okText: 'Eliminar',
+            okType: 'danger',
+            cancelText: 'Cancelar',
+            onOk: async () => {
+                try {
+                    await apiClient.post('/productos/delete-permanent', { id });
+                    message.success('Producto eliminado permanentemente');
+                    // Actualización optimista
+                    setProductos(prev => prev.filter(p => p.id !== id));
+                } catch (error) {
+                    message.error(error.response?.data?.message || 'Error al eliminar');
+                }
+            }
+        });
+    };
+
+    // Cambiar estado (activar/desactivar)
+    const handleToggleStatus = async (id, currentStatus) => {
         try {
-            await apiClient.post('/productos/delete', { id });
-            message.success('Producto eliminado exitosamente');
-            fetchProductos();
+            const { data } = await apiClient.post('/productos/toggle-status', { id });
+            message.success(`Producto ${data.newStatus === 'activo' ? 'activado' : 'desactivado'}`);
+            
+            // Actualización optimista del estado
+            setProductos(prev => prev.map(p => 
+                p.id === id ? { ...p, status: data.newStatus } : p
+            ));
         } catch (error) {
-            message.error('Error al eliminar el producto');
+            message.error(error.response?.data?.message || 'Error al cambiar estado');
         }
     };
 
     const handleEditProducto = (record) => {
         setEditingId(record.id);
-        formProducto.setFieldsValue({
+        
+        // Prepara los valores para el formulario
+        const formValues = {
             nombre: record.nombre,
             precioPublico: record.precioPublico,
             precioCompra: record.precioCompra,
@@ -109,8 +202,22 @@ const Inventario = () => {
             codigoBarras: record.codigoBarras,
             descripcion: record.descripcion,
             proveedor: record.proveedor,
-            minimoStock: record.minimoStock
-        });
+            minimoStock: record.minimoStock,
+            status: record.status,
+            imagenUrlAnterior: record.imagenUrl // Guarda la URL anterior para posible eliminación
+        };
+        
+        // Si hay imagen existente, prepara el campo de subida
+        if (record.imagenUrl) {
+            formValues.imagen = [{
+                uid: '-1',
+                name: 'imagen-actual',
+                status: 'done',
+                url: record.imagenUrl
+            }];
+        }
+        
+        formProducto.setFieldsValue(formValues);
         setProductoModalVisible(true);
     };
 
@@ -126,6 +233,36 @@ const Inventario = () => {
 
     // Columnas para la tabla de productos
     const columnsProductos = [
+        {
+            title: 'Imagen',
+            dataIndex: 'imagenUrl',
+            key: 'imagen',
+            render: (url) => (
+                url ? (
+                    <Image
+                        width={50}
+                        height={50}
+                        src={url}
+                        style={{ borderRadius: 4, objectFit: 'cover' }}
+                        preview={{
+                            mask: <span>Ver imagen</span>
+                        }}
+                    />
+                ) : (
+                    <div style={{
+                        width: 50,
+                        height: 50,
+                        backgroundColor: '#f0f0f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 4
+                    }}>
+                        <span style={{ color: '#999' }}>Sin imagen</span>
+                    </div>
+                )
+            )
+        },
         {
             title: 'Nombre',
             dataIndex: 'nombre',
@@ -159,6 +296,24 @@ const Inventario = () => {
             ),
         },
         {
+            title: 'Estado',
+            dataIndex: 'status',
+            key: 'status',
+            render: (text, record) => (
+                <Switch
+                    checked={text === 'activo'}
+                    onChange={() => handleToggleStatus(record.id, text)}
+                    checkedChildren="Activo"
+                    unCheckedChildren="Inactivo"
+                />
+            ),
+            filters: [
+                { text: 'Activos', value: 'activo' },
+                { text: 'Inactivos', value: 'inactivo' },
+            ],
+            onFilter: (value, record) => record.status === value,
+        },
+        {
             title: 'Acciones',
             key: 'actions',
             render: (_, record) => (
@@ -168,14 +323,22 @@ const Inventario = () => {
                         icon={<EditOutlined />}
                         onClick={() => handleEditProducto(record)}
                     />
-                    <Popconfirm
-                        title="¿Eliminar este producto?"
-                        onConfirm={() => handleDeleteProducto(record.id)}
-                        okText="Sí"
-                        cancelText="No"
+                    <Dropdown
+                        overlay={
+                            <Menu>
+                                <Menu.Item 
+                                    key="delete-permanent" 
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    onClick={() => handleDeletePermanente(record.id)}
+                                >
+                                    Eliminar Permanentemente
+                                </Menu.Item>
+                            </Menu>
+                        }
                     >
-                        <Button danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
+                        <Button icon={<MoreOutlined />} />
+                    </Dropdown>
                 </Space>
             ),
         },
@@ -313,9 +476,50 @@ const Inventario = () => {
                     layout="vertical"
                     onFinish={editingId ? handleUpdateProducto : handleCreateProducto}
                     initialValues={{
-                        minimoStock: 5
+                        minimoStock: 5,
+                        status: 'activo'
                     }}
                 >
+                    {/* Campo para subir imagen */}
+                    <Form.Item
+                        name="imagen"
+                        label="Imagen del Producto"
+                        valuePropName="fileList"
+                        getValueFromEvent={(e) => {
+                            if (Array.isArray(e)) {
+                                return e;
+                            }
+                            return e && e.fileList;
+                        }}
+                    >
+                        <Upload
+                            name="imagen"
+                            listType="picture-card"
+                            maxCount={1}
+                            beforeUpload={beforeUpload}
+                            onChange={({ fileList }) => {
+                                // Mantener solo una imagen
+                                if (fileList.length > 1) {
+                                    fileList.shift();
+                                }
+                            }}
+                        >
+                            {formProducto.getFieldValue('imagen')?.length ? null : (
+                                <div>
+                                    <UploadOutlined />
+                                    <div style={{ marginTop: 8 }}>Subir imagen</div>
+                                </div>
+                            )}
+                        </Upload>
+                    </Form.Item>
+
+                    {/* Campo oculto para guardar la URL anterior de la imagen */}
+                    {editingId && (
+                        <Form.Item name="imagenUrlAnterior" hidden>
+                            <Input type="hidden" />
+                        </Form.Item>
+                    )}
+
                     <Form.Item
                         name="nombre"
                         label="Nombre del Producto"
@@ -431,6 +635,19 @@ const Inventario = () => {
                     >
                         <Input placeholder="Nombre del proveedor" />
                     </Form.Item>
+
+                    {editingId && (
+                        <Form.Item
+                            name="status"
+                            label="Estado"
+                            valuePropName="checked"
+                        >
+                            <Switch
+                                checkedChildren="Activo"
+                                unCheckedChildren="Inactivo"
+                            />
+                        </Form.Item>
+                    )}
 
                     <Form.Item style={{ textAlign: 'right' }}>
                         <Button onClick={() => setProductoModalVisible(false)} style={{ marginRight: 8 }}>

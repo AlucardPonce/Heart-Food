@@ -1,162 +1,258 @@
 const admin = require("firebase-admin");
 const db = require("../DB/DB_connection");
 const { verifyToken } = require("../Middleware/mid");
+const multer = require('multer');
+const path = require('path'); // Importa el módulo path
+const fs = require('fs'); // Importa el módulo fs si no está ya importado
 
-/**
- * Controlador para insertar un nuevo producto en el inventario.
- */
-const insertProducto = async (req, res) => {
-    try {
-        console.log('Iniciando inserción de producto...');
-        console.log('Datos recibidos:', req.body);
-
-        // Validar datos requeridos
-        if (!req.body.nombre || !req.body.precioPublico ||
-            !req.body.precioCompra || !req.body.categoria ||
-            !req.body.cantidad) {
-            console.error('Validación fallida:', req.body);
-            return res.status(400).json({
-                success: false,
-                message: 'Datos incompletos',
-                requiredFields: ['nombre', 'precioPublico', 'precioCompra', 'categoria', 'cantidad']
-            });
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(__dirname, '../../Frontend/public/uploads/productos');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
         }
-
-        // Verificar que la categoría exista
-        const categoriaRef = db.collection('categorias').doc(req.body.categoria);
-        const categoriaDoc = await categoriaRef.get();
-
-        if (!categoriaDoc.exists) {
-            return res.status(400).json({
-                success: false,
-                message: 'La categoría especificada no existe'
-            });
-        }
-
-        // Preparar datos para Firestore
-        const productoData = {
-            nombre: req.body.nombre,
-            precioPublico: parseFloat(req.body.precioPublico),
-            precioCompra: parseFloat(req.body.precioCompra),
-            categoria: req.body.categoria,
-            cantidad: parseInt(req.body.cantidad),
-            codigoBarras: req.body.codigoBarras || '',
-            descripcion: req.body.descripcion || '',
-            proveedor: req.body.proveedor || '',
-            minimoStock: parseInt(req.body.minimoStock) || 5,
-            creadoPor: req.username,
-            fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
-            fechaActualizacion: admin.firestore.FieldValue.serverTimestamp(),
-            status: 'activo'
-        };
-
-        console.log('Datos a insertar:', productoData);
-
-        // Insertar en Firestore
-        const docRef = await db.collection('inventario').add(productoData);
-
-        // Actualizar el documento para incluir el ID generado automáticamente
-        await docRef.update({ id: docRef.id });
-
-        console.log('Producto creado con ID:', docRef.id);
-
-        return res.status(201).json({
-            success: true,
-            message: 'Producto creado exitosamente',
-            data: {
-                id: docRef.id,
-                ...productoData
-            }
-        });
-
-    } catch (error) {
-        console.error('Error crítico:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Error en el servidor',
-            errorDetails: {
-                code: error.code,
-                message: error.message,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            }
-        });
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, 'product-' + uniqueSuffix + ext);
     }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB
+    },
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|gif/;
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = filetypes.test(file.mimetype);
+
+        if (mimetype && extname) {
+            return cb(null, true);
+        } else {
+            cb(new Error('Solo imágenes (JPEG, JPG, PNG, GIF) son permitidas'));
+        }
+    }
+}).single('imagen');
+
+const insertProducto = async (req, res) => {
+    upload(req, res, async (err) => {
+        try {
+            console.log('Iniciando inserción de producto...');
+
+            if (err) {
+                console.error('Error al subir imagen:', err);
+                return res.status(400).json({
+                    success: false,
+                    message: err.message
+                });
+            }
+
+            // Validar datos requeridos
+            if (!req.body.nombre || !req.body.precioPublico ||
+                !req.body.precioCompra || !req.body.categoria ||
+                !req.body.cantidad) {
+                console.error('Validación fallida:', req.body);
+
+                // Eliminar imagen si se subió pero hay error de validación
+                if (req.file) {
+                    fs.unlinkSync(req.file.path);
+                }
+
+                return res.status(400).json({
+                    success: false,
+                    message: 'Datos incompletos',
+                    requiredFields: ['nombre', 'precioPublico', 'precioCompra', 'categoria', 'cantidad']
+                });
+            }
+
+            // Preparar datos para Firestore
+            const productoData = {
+                nombre: req.body.nombre,
+                precioPublico: parseFloat(req.body.precioPublico),
+                precioCompra: parseFloat(req.body.precioCompra),
+                categoria: req.body.categoria,
+                cantidad: parseInt(req.body.cantidad),
+                codigoBarras: req.body.codigoBarras || '',
+                descripcion: req.body.descripcion || '',
+                proveedor: req.body.proveedor || '',
+                minimoStock: parseInt(req.body.minimoStock) || 5,
+                creadoPor: req.username,
+                fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
+                fechaActualizacion: admin.firestore.FieldValue.serverTimestamp(),
+                status: 'activo'
+            };
+
+            // Agregar la URL de la imagen si se subió
+            if (req.file) {
+                productoData.imagenUrl = '/uploads/productos/' + req.file.filename;
+            }
+
+            console.log('Datos a insertar:', productoData);
+
+            // Insertar en Firestore
+            const docRef = await db.collection('inventario').add(productoData);
+
+            // Actualizar el documento para incluir el ID generado automáticamente
+            await docRef.update({ id: docRef.id });
+
+            console.log('Producto creado con ID:', docRef.id);
+
+            return res.status(201).json({
+                success: true,
+                message: 'Producto creado exitosamente',
+                data: {
+                    id: docRef.id,
+                    ...productoData
+                }
+            });
+
+        } catch (error) {
+            console.error('Error crítico:', error);
+
+            // Eliminar imagen si hubo error después de subirla
+            if (req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+
+            return res.status(500).json({
+                success: false,
+                message: 'Error en el servidor',
+                errorDetails: {
+                    code: error.code,
+                    message: error.message,
+                    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+                }
+            });
+        }
+    });
 };
 
 /**
  * Controlador para actualizar un producto existente.
  */
 const updateProducto = async (req, res) => {
-    try {
-        const { id, ...productoData } = req.body;
+    // Manejar la subida de archivos primero
+    upload(req, res, async (err) => {
+        try {
+            console.log(`Actualizando producto...`);
 
-        console.log(`Actualizando producto con ID: ${id}`);
-        console.log('Datos recibidos para actualizar:', productoData);
-
-        // Validar que el ID exista
-        if (!id) {
-            return res.status(400).json({
-                success: false,
-                message: 'El ID del producto es requerido en el cuerpo de la solicitud',
-            });
-        }
-
-        // Si se actualiza la categoría, verificar que exista
-        if (productoData.categoria) {
-            const categoriaRef = db.collection('categorias').doc(productoData.categoria);
-            const categoriaDoc = await categoriaRef.get();
-
-            if (!categoriaDoc.exists) {
+            if (err) {
+                console.error('Error al subir imagen:', err);
                 return res.status(400).json({
                     success: false,
-                    message: 'La categoría especificada no existe'
+                    message: err.message
                 });
             }
-        }
 
-        // Preparar datos para actualización
-        const updateData = {
-            ...productoData,
-            fechaActualizacion: admin.firestore.FieldValue.serverTimestamp()
-        };
+            const { id, imagenUrlAnterior, ...productoData } = req.body;
 
-        // Convertir tipos de datos si es necesario
-        if (productoData.precioPublico) updateData.precioPublico = parseFloat(productoData.precioPublico);
-        if (productoData.precioCompra) updateData.precioCompra = parseFloat(productoData.precioCompra);
-        if (productoData.cantidad) updateData.cantidad = parseInt(productoData.cantidad);
-        if (productoData.minimoStock) updateData.minimoStock = parseInt(productoData.minimoStock);
+            // Validar que el ID exista
+            if (!id) {
+                // Eliminar imagen si se subió pero no hay ID
+                if (req.file) {
+                    fs.unlinkSync(req.file.path);
+                }
+                return res.status(400).json({
+                    success: false,
+                    message: 'El ID del producto es requerido'
+                });
+            }
 
-        // Actualizar el documento en Firestore
-        const productoRef = db.collection('inventario').doc(id);
-        const productoSapshot = await productoRef.get();
+            // Si se actualiza la categoría, verificar que exista
+            if (productoData.categoria) {
+                const categoriaRef = db.collection('categorias').doc(productoData.categoria);
+                const categoriaDoc = await categoriaRef.get();
 
-        if (!productoSapshot.exists) {
-            return res.status(404).json({
+                if (!categoriaDoc.exists) {
+                    // Eliminar imagen si se subió pero la categoría no existe
+                    if (req.file) {
+                        fs.unlinkSync(req.file.path);
+                    }
+                    return res.status(400).json({
+                        success: false,
+                        message: 'La categoría especificada no existe'
+                    });
+                }
+            }
+
+            // Preparar datos para actualización
+            const updateData = {
+                ...productoData,
+                fechaActualizacion: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Si hay nueva imagen, actualizar la URL y eliminar la anterior
+            if (req.file) {
+                updateData.imagenUrl = '/uploads/productos/' + req.file.filename;
+
+                // Eliminar imagen anterior si existe
+                if (imagenUrlAnterior) {
+                    const oldImagePath = path.join(__dirname, '../../public', imagenUrlAnterior);
+                    if (fs.existsSync(oldImagePath)) {
+                        fs.unlinkSync(oldImagePath);
+                    }
+                }
+            }
+
+            // Convertir tipos de datos numéricos
+            if (productoData.precioPublico) updateData.precioPublico = parseFloat(productoData.precioPublico);
+            if (productoData.precioCompra) updateData.precioCompra = parseFloat(productoData.precioCompra);
+            if (productoData.cantidad) updateData.cantidad = parseInt(productoData.cantidad);
+            if (productoData.minimoStock) updateData.minimoStock = parseInt(productoData.minimoStock);
+
+            console.log('Datos a actualizar:', updateData);
+
+            // Actualizar el documento en Firestore
+            const productoRef = db.collection('inventario').doc(id);
+            const productoSapshot = await productoRef.get();
+
+            if (!productoSapshot.exists) {
+                // Eliminar imagen si se subió pero el producto no existe
+                if (req.file) {
+                    fs.unlinkSync(req.file.path);
+                }
+                return res.status(404).json({
+                    success: false,
+                    message: 'El producto no existe'
+                });
+            }
+
+            await productoRef.update(updateData);
+
+            console.log(`Producto con ID ${id} actualizado correctamente`);
+
+            return res.status(200).json({
+                success: true,
+                message: 'Producto actualizado correctamente',
+                data: {
+                    id,
+                    ...updateData
+                }
+            });
+
+        } catch (error) {
+            console.error('Error al actualizar el producto:', error);
+
+            // Eliminar imagen si hubo error después de subirla
+            if (req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+
+            return res.status(500).json({
                 success: false,
-                message: 'El producto no existe',
+                message: 'Error en el servidor',
+                errorDetails: {
+                    code: error.code,
+                    message: error.message,
+                    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+                }
             });
         }
-
-        await productoRef.update(updateData);
-
-        console.log(`Producto con ID ${id} actualizado correctamente`);
-
-        return res.status(200).json({
-            success: true,
-            message: 'Producto actualizado correctamente',
-        });
-    } catch (error) {
-        console.error('Error al actualizar el producto:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Error en el servidor',
-            errorDetails: {
-                code: error.code,
-                message: error.message,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-            },
-        });
-    }
+    });
 };
 
 /**
@@ -275,55 +371,70 @@ const getProductoById = async (req, res) => {
     }
 };
 
-/**
- * Controlador para eliminar un producto (cambiar status a inactivo)
- */
 const deleteProducto = async (req, res) => {
+    const startTime = Date.now();
+    const log = (message) => console.log(`[${Date.now() - startTime}ms] ${message}`);
+
     try {
+        log("Iniciando desactivación de producto");
         const { id } = req.body;
 
-        console.log(`Eliminando (desactivando) producto con ID: ${id}`);
-
-        if (!id) {
+        if (!id || typeof id !== 'string') {
+            log("ID inválido recibido");
             return res.status(400).json({
                 success: false,
-                message: 'El ID del producto es requerido en el cuerpo de la solicitud'
+                message: 'ID de producto no válido',
+                receivedId: id,
+                type: typeof id
             });
         }
 
+        log(`Buscando producto con ID: ${id}`);
         const productoRef = db.collection('inventario').doc(id);
         const productoDoc = await productoRef.get();
 
         if (!productoDoc.exists) {
+            log("Producto no encontrado");
             return res.status(404).json({
                 success: false,
-                message: 'Producto no encontrado'
+                message: 'Producto no encontrado',
+                productId: id
             });
         }
 
-        // Actualizar el status a inactivo en lugar de borrar
-        await productoRef.update({
+        log("Producto encontrado, actualizando estado...");
+        const updateData = {
             status: 'inactivo',
             fechaActualizacion: admin.firestore.FieldValue.serverTimestamp()
-        });
+        };
 
-        console.log(`Producto con ID ${id} marcado como inactivo`);
+        await productoRef.update(updateData);
+        log("Producto desactivado exitosamente");
 
         return res.status(200).json({
             success: true,
-            message: 'Producto desactivado correctamente'
+            message: 'Producto desactivado correctamente',
+            productId: id,
+            newStatus: 'inactivo'
         });
 
     } catch (error) {
-        console.error('Error al eliminar el producto:', error);
+        log(`Error: ${error.message}`);
+        console.error("Detalles técnicos:", {
+            errorCode: error.code,
+            errorMessage: error.message,
+            firebaseError: error.details || 'No disponible'
+        });
+
         return res.status(500).json({
             success: false,
-            message: 'Error en el servidor',
-            errorDetails: {
-                code: error.code,
-                message: error.message,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            }
+            message: 'Error al desactivar el producto',
+            ...(process.env.NODE_ENV === 'development' && {
+                technicalDetails: {
+                    code: error.code,
+                    message: error.message
+                }
+            })
         });
     }
 };
@@ -400,6 +511,84 @@ const getCategorias = async (req, res) => {
     }
 };
 
+/**
+ * Eliminar producto permanentemente
+ */
+const deleteProductoPermanente = async (req, res) => {
+    try {
+        const { id } = req.body;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Se requiere el ID del producto'
+            });
+        }
+
+        const productoRef = db.collection('inventario').doc(id);
+        await productoRef.delete();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Producto eliminado permanentemente'
+        });
+
+    } catch (error) {
+        console.error('Error al eliminar:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error en el servidor'
+        });
+    }
+};
+
+/**
+ * Cambiar estado (activar/desactivar)
+ */
+const toggleStatusProducto = async (req, res) => {
+    try {
+        const { id } = req.body;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Se requiere el ID del producto'
+            });
+        }
+
+        const productoRef = db.collection('inventario').doc(id);
+        const productoDoc = await productoRef.get();
+
+        if (!productoDoc.exists) {
+            return res.status(404).json({
+                success: false,
+                message: 'Producto no encontrado'
+            });
+        }
+
+        const currentStatus = productoDoc.data().status;
+        const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
+
+        await productoRef.update({
+            status: newStatus,
+            fechaActualizacion: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `Producto ${newStatus === 'activo' ? 'activado' : 'desactivado'}`,
+            newStatus
+        });
+
+    } catch (error) {
+        console.error('Error al cambiar estado:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error en el servidor'
+        });
+    }
+};
+
 // Exportar los controladores
 module.exports = {
     insertProducto,
@@ -408,5 +597,7 @@ module.exports = {
     getProductoById,
     deleteProducto,
     insertCategoria,
-    getCategorias
+    getCategorias,
+    deleteProductoPermanente,
+    toggleStatusProducto
 };
