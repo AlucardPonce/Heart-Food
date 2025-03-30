@@ -18,7 +18,7 @@ const HomePage = () => {
                     <BigButton style="inv" label="INVENTARIO" />
                 </Link>
                 <Link to={"/home/producto"}>
-                    <BigButton style="pro" label="PRODUCTO" />
+                    <BigButton style="pro" label="VENTA" />
                 </Link>
             </div>
         </div>
