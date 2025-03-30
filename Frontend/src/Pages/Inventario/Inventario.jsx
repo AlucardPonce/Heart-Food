@@ -44,6 +44,11 @@ const Inventario = () => {
         }
     };
 
+    useEffect(() => {
+        fetchProductos();
+        fetchCategorias();
+    }, []);
+
     // Crear categoría
     const handleCreateCategoria = async (values) => {
         try {
