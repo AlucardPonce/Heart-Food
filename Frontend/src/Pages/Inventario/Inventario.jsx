@@ -120,21 +120,21 @@ const Inventario = () => {
     const handleUpdateProducto = async (values) => {
         try {
             const formData = new FormData();
-            
+
             // Agregar todos los campos del formulario
             Object.keys(values).forEach(key => {
                 if (key === 'imagen' && values[key]?.[0]?.originFileObj) {
-                    formData.append('imagen', values.imagen[0].originFileObj);
+                    formData.append('imagen', values.imagen[0].originFileObj); // Nueva imagen
                 } else if (key !== 'imagen') {
                     formData.append(key, values[key]);
                 }
             });
-            
+
             formData.append('id', editingId);
-            
+
             // Incluir la URL anterior para eliminación si es necesario
-            if (values.imagenUrlAnterior) {
-                formData.append('imagenUrlAnterior', values.imagenUrlAnterior);
+            if (values.imagenUrlAnterior && (!values.imagen || values.imagen.length === 0)) {
+                formData.append('imagenUrlAnterior', values.imagenUrlAnterior); // Indica que la imagen anterior debe eliminarse
             }
 
             await apiClient.post('/productos/update', formData, {
@@ -142,7 +142,7 @@ const Inventario = () => {
                     'Content-Type': 'multipart/form-data'
                 }
             });
-            
+
             message.success('Producto actualizado exitosamente');
             fetchProductos();
             setProductoModalVisible(false);
@@ -379,6 +379,7 @@ const Inventario = () => {
 
     return (
         <div style={{ padding: '24px' }}>
+            <div><h1>Inventario</h1></div>
             <Card>
                 <Tabs defaultActiveKey="1" onChange={(key) => setActiveTab(key)}>
                     <TabPane tab={
@@ -497,14 +498,17 @@ const Inventario = () => {
                             listType="picture-card"
                             maxCount={1}
                             beforeUpload={beforeUpload}
+                            onRemove={() => {
+                                // Eliminar la imagen actual del formulario
+                                formProducto.setFieldsValue({ imagen: [] });
+                            }}
                             onChange={({ fileList }) => {
-                                // Mantener solo una imagen
-                                if (fileList.length > 1) {
-                                    fileList.shift();
-                                }
+                                // Actualizar el campo del formulario con la lista de archivos
+                                formProducto.setFieldsValue({ imagen: fileList });
                             }}
                         >
-                            {formProducto.getFieldValue('imagen')?.length ? null : (
+                            {/* Mostrar el botón de subida si no hay imágenes */}
+                            {(!formProducto.getFieldValue('imagen') || formProducto.getFieldValue('imagen').length === 0) && (
                                 <div>
                                     <UploadOutlined />
                                     <div style={{ marginTop: 8 }}>Subir imagen</div>
