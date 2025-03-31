@@ -1,58 +1,67 @@
-import { Navigate, useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
+import axios from "axios";
 
 const ProtectedRoute = ({ children }) => {
+    const [authStatus, setAuthStatus] = useState('checking'); // 'checking', 'valid', 'invalid'
     const navigate = useNavigate();
-    const [isValid, setIsValid] = useState(null); // Estado para verificar la validez del token
-    const token = localStorage.getItem("token"); // Obtener el token del almacenamiento local
 
-    // Función para cerrar sesión y redirigir al login
-    const logout = useCallback(() => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        alert("Sesión cerrada por inactividad o token inválido");
-        navigate("/login", { replace: true });
-    }, [navigate]);
-
-    // Validar el token con el backend
     useEffect(() => {
         const validateToken = async () => {
+            const token = localStorage.getItem("token");
+            
+            if (!token) {
+                setAuthStatus('invalid');
+                return;
+            }
+
             try {
-                const response = await fetch("http://localhost:3001/validate-token", {
-                    method: "GET",
+                // Verificación básica del formato del token antes de enviar al backend
+                if (token.split('.').length !== 3) {
+                    throw new Error('Token mal formado');
+                }
+
+                const response = await axios.get("http://localhost:3001/validate-token", {
                     headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
+                        "Authorization": `Bearer ${token}`
                     },
+                    validateStatus: (status) => status < 500 // Para manejar 401, 403, etc.
                 });
 
-                if (response.ok) {
-                    setIsValid(true); // Token válido
+                if (response.data.valid) {
+                    setAuthStatus('valid');
                 } else {
-                    logout(); // Token inválido o expirado
+                    throw new Error('Token inválido');
                 }
             } catch (error) {
-                console.error("Error al validar el token:", error);
-                logout(); // Error en la validación
+                console.error("Error en validación de token:", {
+                    error: error.message,
+                    response: error.response?.data
+                });
+                handleLogout();
             }
         };
 
-        if (token) {
-            validateToken();
-        } else {
-            logout(); // Si no hay token, cerrar sesión
-        }
-    }, [token, logout]);
+        const handleLogout = () => {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            setAuthStatus('invalid');
+            // No uses alert en producción, mejor usa un sistema de notificaciones
+            console.warn("Sesión cerrada por token inválido o expirado"); 
+        };
 
-    if (isValid === null) {
-        return <div>Cargando...</div>; // Mostrar un indicador de carga mientras se valida el token
+        validateToken();
+    }, [navigate]);
+
+    if (authStatus === 'checking') {
+        return <div>Cargando...</div>;
     }
 
-    if (!isValid) {
-        return <Navigate to="/login" replace />; // Redirigir al login si el token no es válido
+    if (authStatus === 'invalid') {
+        return <Navigate to="/login" replace />;
     }
 
-    return children; // Renderizar el contenido protegido si el token es válido
+    return children;
 };
 
 export default ProtectedRoute;

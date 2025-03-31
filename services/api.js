@@ -7,13 +7,23 @@ const { insertSucursal, getSucursales, updateSucursal } = require("./CTL/MapCtl"
 const { verifyToken } = require("./Middleware/mid");
 const { insertProducto, getProductos, updateProducto, getProductoById, insertCategoria, getCategorias, deleteProductoPermanente, toggleStatusProducto } = require("./CTL/InventarioCtl");
 const { registrarVenta, getHistorialVentas, getProductosActivos, getVentaById } = require("./CTL/VentasCtl");
+const { generateMFASecret, validateMFA } = require("./CTL/MFACtl");
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true,
+    exposedHeaders: ['Authorization']
+}));
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
+app.post('/mfa/generate', generateMFASecret);
+app.post('/mfa/validate-user', validateUser);
+app.post('/mfa/validate', validateMFA);
+
+app.get('/validate-token', verifyToken, (req, res) => {
+    res.json({ valid: true, username: req.username });
+});
 
 app.post('/sucursales', verifyToken, insertSucursal);
 app.get('/sucursales', verifyToken, getSucursales);
@@ -37,17 +47,10 @@ app.get('/ventas', verifyToken, getHistorialVentas);
 app.get('/productos-activos', verifyToken, getProductosActivos);
 app.get('/ventas/:id', verifyToken, getVentaById);
 
-app.get('/validate-token', verifyToken, (req, res) => {
-    res.status(200).json({ valid: true, user: req.username });
-});
-
-app.post('/validate', validateUser);
-app.post('/register', registerUser);
-app.post('/reset-password', reset);
 
 // ==================== 🔴 IMPLEMENTACIÓN DE SSE 🔴 ====================
 
-let clients = []; 
+let clients = [];
 
 app.get('/events', (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
@@ -70,3 +73,5 @@ setInterval(() => {
 }, 10000);
 
 
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));

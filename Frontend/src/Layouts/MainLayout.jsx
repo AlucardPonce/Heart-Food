@@ -10,7 +10,7 @@ const MainLayout = () => {
     const [updates, setUpdates] = useState([]);
 
     useEffect(() => {
-        const eventSource = new EventSource("http://localhost:3001/events");
+        let eventSource = new EventSource("http://localhost:3001/events");
 
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
