@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, InputNumber, Space, Row, Col, Divider, Typography, Modal, message, Spin } from 'antd';
 import { ShoppingCartOutlined, DollarOutlined, CheckOutlined } from '@ant-design/icons';
-import apiClient from '../../services/interceptor'; // Asegúrate de que la ruta sea correcta
+import apiClient from '../../services/interceptor';
 import './components/styles/producto.css';
 import EventEmitter from './components/EvenEmitter';
 
@@ -19,7 +19,7 @@ const Producto = () => {
         const fetchProducts = async () => {
             try {
                 const response = await apiClient.get('/productos-activos');
-                console.log('Response data:', response.data); // Verifica la estructura aquí
+                console.log('Response data:', response.data);
                 const productsData = Array.isArray(response.data.data)
                     ? response.data.data.map(product => ({
                         ...product,
@@ -45,7 +45,8 @@ const Producto = () => {
                     if (vendido) {
                         return {
                             ...product,
-                            cantidad: product.cantidad - vendido.cantidadSeleccionada
+                            cantidad: product.cantidad - vendido.cantidadSeleccionada,
+                            cantidadSeleccionada: 0 // Resetear la cantidad seleccionada
                         };
                     }
                     return product;
@@ -66,12 +67,24 @@ const Producto = () => {
     // Manejar cambio de cantidad
     const handleQuantityChange = (productId, value) => {
         const product = productos.find(p => p.id === productId);
-
-        if (value > product.cantidad) {
-            message.warning(`La cantidad ingresada excede el stock disponible (${product.cantidad}).`);
-            return;
+        
+        // Si el valor es null o undefined (puede ocurrir al borrar el input)
+        if (value === null || value === undefined) {
+            value = 0;
         }
 
+        // Validación estricta que no permite exceder el stock
+        if (value > product.cantidad) {
+            message.warning(`La cantidad no puede exceder el stock disponible (${product.cantidad}).`);
+            value = product.cantidad; // Forzar el valor máximo
+        }
+
+        // Asegurarse que no sea negativo
+        if (value < 0) {
+            value = 0;
+        }
+
+        // Actualizar productos
         setProductos(prevProducts =>
             prevProducts.map(product =>
                 product.id === productId
@@ -127,11 +140,15 @@ const Producto = () => {
         setSaleLoading(true);
 
         try {
-            // Validar que ningún producto exceda el stock disponible
-            const productosExcedidos = selectedProducts.filter(p => p.cantidadSeleccionada > p.cantidad);
+            // Validación reforzada de stock
+            const productosExcedidos = selectedProducts.filter(p => {
+                const productoActual = productos.find(prod => prod.id === p.id);
+                return p.cantidadSeleccionada > (productoActual?.cantidad || 0);
+            });
+            
             if (productosExcedidos.length > 0) {
                 const nombresProductos = productosExcedidos.map(p => p.nombre).join(', ');
-                message.error(`La cantidad seleccionada excede el stock disponible para: ${nombresProductos}`);
+                message.error(`Error de stock: La cantidad seleccionada excede el disponible para: ${nombresProductos}`);
                 setSaleLoading(false);
                 return;
             }
@@ -175,7 +192,7 @@ const Producto = () => {
         return (
             <div className="loading-container">
                 <Spin size="large" tip="Cargando productos...">
-                    <div style={{ height: '100px' }}></div> {/* Contenedor anidado */}
+                    <div style={{ height: '100px' }}></div>
                 </Spin>
             </div>
         );
@@ -221,7 +238,7 @@ const Producto = () => {
                             size="large"
                             icon={<CheckOutlined />}
                             onClick={procesarVenta}
-                            disabled={selectedProducts.length === 0}
+                            disabled={selectedProducts.length === 0 || productos.some(p => p.cantidadSeleccionada > p.cantidad)}
                             block
                         >
                             Procesar Venta
@@ -255,14 +272,22 @@ const Producto = () => {
                             actions={[
                                 <Space direction="vertical" style={{ width: '100%' }}>
                                     <Text strong>${product.precioPublico.toFixed(2)}</Text>
-                                    <Text type="secondary">Stock: {product.cantidad}</Text>
+                                    <Text type={product.cantidad < 5 ? "danger" : "secondary"}>
+                                        Stock: {product.cantidad}
+                                        {product.cantidad < 5 && " (Bajo stock)"}
+                                    </Text>
                                     <InputNumber
                                         min={0}
                                         max={product.cantidad}
-                                        defaultValue={0}
                                         value={product.cantidadSeleccionada}
                                         onChange={(value) => handleQuantityChange(product.id, value)}
                                         style={{ width: '100%' }}
+                                        parser={(value) => (isNaN(parseInt(value)) ? 0 : Math.min(parseInt(value), product.cantidad))}
+                                        onBlur={(e) => {
+                                            if (e.target.value === '' || isNaN(e.target.value)) {
+                                                handleQuantityChange(product.id, 0);
+                                            }
+                                        }}
                                     />
                                 </Space>
                             ]}
@@ -283,7 +308,7 @@ const Producto = () => {
             {/* Modal de confirmación */}
             <Modal
                 title="Confirmar Venta"
-                open={isModalVisible} // Cambiado de "visible"
+                open={isModalVisible}
                 onOk={confirmarVenta}
                 onCancel={() => setIsModalVisible(false)}
                 confirmLoading={saleLoading}
