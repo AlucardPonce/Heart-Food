@@ -1,4 +1,4 @@
-import { Form, Input, Button, Card, Typography, message } from "antd";
+import { Form, Input, Button, Card, Typography, message, Modal } from "antd";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -33,7 +33,7 @@ const LoginPage = () => {
             if (response.data.statusCode === 200) {
                 message.success("Inicio de sesión exitoso");
                 localStorage.setItem("token", response.data.data.token);
-                navigate("/home"); 
+                navigate("/home");
             } else {
                 setFormError("Credenciales incorrectas");
             }
@@ -43,6 +43,37 @@ const LoginPage = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleResetPassword = () => {
+        let email = "";
+
+        Modal.confirm({
+            title: "Restablecer contraseña",
+            content: (
+                <Input
+                    placeholder="Ingresa tu correo"
+                    onChange={(e) => (email = e.target.value)}
+                />
+            ),
+            onOk: async () => {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+                if (!email || !emailRegex.test(email)) {
+                    message.error("Por favor, ingresa un correo válido.");
+                    return;
+                }
+
+                try {
+                    await axios.post(`${API_URL}/reset-password`, { email });
+                    message.success("Correo de recuperación enviado");
+                } catch (error) {
+                    const resetErrorMessage = error.response?.data?.message || "No se pudo enviar el correo";
+                    console.error("Error al enviar el correo de recuperación:", resetErrorMessage);
+                    message.error(resetErrorMessage);
+                }
+            },
+        });
     };
 
     useEffect(() => {
@@ -93,6 +124,10 @@ const LoginPage = () => {
                             Iniciar Sesión
                         </Button>
                     </Form.Item>
+
+                    <Button type="link" onClick={handleResetPassword} style={{ padding: 0 }}>
+                        ¿Olvidaste tu contraseña?
+                    </Button>
                 </Form>
                 <div style={styles.center}>
                     <p>

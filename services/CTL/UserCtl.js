@@ -2,6 +2,63 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("../DB/DB_connection");
 const { generateToken } = require("../Middleware/mid.js");
+const nodemailer = require("nodemailer");
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail', // Puedes usar cualquier servicio de correo electrónico
+    auth: {
+        user: 'poncealucard@gmail.com',
+        pass: 'vwixjvyzppizaruw'
+    }
+});
+
+const generateRandomPassword = () => {
+    return Math.random().toString(36).slice(-8); // Genera una contraseña aleatoria de 8 caracteres
+};
+
+const reset = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        console.log("Correo recibido:", email); // Log para verificar el correo recibido
+
+        // Cambia "users" por "USERS" para que coincida con tu base de datos
+        const userSnapshot = await db.collection("USERS").where("gmail", "==", email).get();
+
+        if (userSnapshot.empty) {
+            console.log("Correo no encontrado en la base de datos"); // Log para depuración
+            return res.status(404).json({ message: "Correo no registrado" });
+        }
+
+        const userDoc = userSnapshot.docs[0];
+        const userId = userDoc.id;
+
+        console.log("Usuario encontrado:", userId); // Log para verificar el usuario encontrado
+
+        const newPassword = generateRandomPassword();
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await db.collection("USERS").doc(userId).update({ password: hashedPassword });
+
+        console.log("Nueva contraseña generada:", newPassword); // Log para verificar la contraseña generada
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Restablecimiento de contraseña",
+            text: `Tu nueva contraseña es: ${newPassword}`,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        console.log("Correo enviado a:", email); // Log para verificar el envío del correo
+
+        res.json({ message: "Correo de recuperación enviado" });
+    } catch (error) {
+        console.error("Error al enviar el correo de recuperación:", error);
+        res.status(400).json({ message: "No se pudo enviar el correo", error: error.message });
+    }
+};
 
 const validateUser = async (req, res) => {
     const { username, password } = req.body;
@@ -100,4 +157,4 @@ const registerUser = async (req, res) => {
     }
 };
 
-module.exports = { validateUser, registerUser };
+module.exports = { validateUser, registerUser, reset };
