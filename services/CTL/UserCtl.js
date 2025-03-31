@@ -1,5 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const admin = require("firebase-admin");
+require("dotenv").config();
 const db = require("../DB/DB_connection");
 const { generateToken } = require("../Middleware/mid.js");
 const nodemailer = require("nodemailer");

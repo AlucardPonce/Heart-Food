@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, DatePicker, Select, Button, Spin, Divider, Table } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Row, Col, DatePicker, Select, Button, Spin, Divider, Table, notification } from 'antd';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import apiClient from '../../services/interceptor'; // Ajusta la ruta según tu estructura
+import apiClient from '../../services/interceptor';
 import moment from 'moment';
 import { DownloadOutlined } from '@ant-design/icons';
 
@@ -21,167 +21,165 @@ const Graficas = () => {
         periodo: 'hoy'
     });
 
-    // Obtener datos iniciales
-    useEffect(() => {
-        cargarOpcionesFiltros();
-        cargarVentas();
-    }, []);
-
-    // Cargar ventas cuando cambian los filtros
-    useEffect(() => {
-        cargarVentas();
-    }, [filtros]);
-
-    const cargarOpcionesFiltros = async () => {
+    // Función para cargar opciones de filtros
+    const cargarOpcionesFiltros = useCallback(async () => {
         try {
-            // Cargar vendedores y métodos de pago desde la API
-            const [ventasRes] = await Promise.all([
-                apiClient.get('/ventas')
-            ]);
-
-            // Extraer vendedores únicos
-            const vendedoresUnicos = [...new Set(
-                ventasRes.data.data.map(v => v.vendedor).filter(Boolean)
-            )].map(v => ({ nombre: v }));
-
-            // Extraer métodos de pago únicos
-            const metodosPagoUnicos = [...new Set(
-                ventasRes.data.data.map(v => v.metodoPago).filter(Boolean)
-            )].map(m => ({ metodo: m }));
+            const response = await apiClient.get('/ventas');
+            const ventasData = response.data.data || [];
+            
+            // Extraer y normalizar vendedores únicos
+            const vendedoresUnicos = Array.from(
+                new Set(ventasData.map(v => v.vendedor).filter(Boolean))
+            ).map(v => ({ nombre: v }));
+            
+            // Extraer y normalizar métodos de pago únicos
+            const metodosPagoUnicos = Array.from(
+                new Set(ventasData.map(v => v.metodoPago).filter(Boolean))
+            ).map(m => ({ metodo: m }));
 
             setVendedores(vendedoresUnicos);
             setMetodosPago(metodosPagoUnicos);
         } catch (error) {
             console.error('Error cargando opciones de filtros:', error);
+            notification.error({
+                message: 'Error',
+                description: 'No se pudieron cargar las opciones de filtros'
+            });
         }
-    };
+    }, []);
 
-    const cargarVentas = async () => {
+    // Función para cargar ventas con filtros aplicados
+    const cargarVentas = useCallback(async () => {
         setLoading(true);
         try {
             let fechaInicio, fechaFin;
 
-            // Ajustar fechas según el periodo seleccionado
+            // Determinar rango de fechas según el periodo seleccionado
             switch (filtros.periodo) {
                 case 'hoy':
-                    fechaInicio = moment().startOf('day').toISOString();
-                    fechaFin = moment().endOf('day').toISOString();
+                    fechaInicio = moment().startOf('day');
+                    fechaFin = moment().endOf('day');
                     break;
                 case 'semana':
-                    fechaInicio = moment().startOf('week').toISOString();
-                    fechaFin = moment().endOf('week').toISOString();
+                    fechaInicio = moment().startOf('week');
+                    fechaFin = moment().endOf('week');
                     break;
                 case 'mes':
-                    fechaInicio = moment().startOf('month').toISOString();
-                    fechaFin = moment().endOf('month').toISOString();
+                    fechaInicio = moment().startOf('month');
+                    fechaFin = moment().endOf('month');
                     break;
                 case 'anio':
-                    fechaInicio = moment().startOf('year').toISOString();
-                    fechaFin = moment().endOf('year').toISOString();
+                    fechaInicio = moment().startOf('year');
+                    fechaFin = moment().endOf('year');
                     break;
                 case 'personalizado':
-                    if (filtros.rangoFechas && filtros.rangoFechas.length === 2) {
-                        fechaInicio = filtros.rangoFechas[0].startOf('day').toISOString();
-                        fechaFin = filtros.rangoFechas[1].endOf('day').toISOString();
+                    if (filtros.rangoFechas?.length === 2) {
+                        fechaInicio = filtros.rangoFechas[0].startOf('day');
+                        fechaFin = filtros.rangoFechas[1].endOf('day');
                     }
                     break;
                 default:
-                    fechaInicio = moment().startOf('day').toISOString();
-                    fechaFin = moment().endOf('day').toISOString();
+                    fechaInicio = moment().startOf('day');
+                    fechaFin = moment().endOf('day');
             }
 
-            const params = {
-                fechaInicio,
-                fechaFin,
-                vendedor: filtros.vendedor,
-                metodoPago: filtros.metodoPago
-            };
+            const response = await apiClient.get('/ventas', { params: { fechaInicio, fechaFin } });
+            let ventasFiltradas = response.data.data || [];
 
-            const response = await apiClient.get('/ventas', { params });
-            setVentas(response.data.data || []);
+            // Filtrar por vendedor y método de pago en el cliente
+            if (filtros.vendedor) {
+                ventasFiltradas = ventasFiltradas.filter(venta => venta.vendedor === filtros.vendedor);
+            }
+            if (filtros.metodoPago) {
+                ventasFiltradas = ventasFiltradas.filter(venta => venta.metodoPago === filtros.metodoPago);
+            }
+
+            setVentas(ventasFiltradas);
         } catch (error) {
             console.error('Error cargando ventas:', error);
+            notification.error({
+                message: 'Error',
+                description: 'No se pudieron cargar las ventas'
+            });
         } finally {
             setLoading(false);
         }
-    };
+    }, [filtros]);
 
+    // Efectos para carga inicial y cuando cambian los filtros
+    useEffect(() => {
+        cargarOpcionesFiltros();
+    }, [cargarOpcionesFiltros]);
+
+    useEffect(() => {
+        cargarVentas();
+    }, [cargarVentas]);
+
+    // Manejador de cambios en filtros
     const handleFiltroChange = (key, value) => {
         setFiltros(prev => ({
             ...prev,
-            [key]: value
+            [key]: value,
+            // Resetear rango de fechas si no es personalizado
+            ...(key === 'periodo' && value !== 'personalizado' && { rangoFechas: null })
         }));
     };
 
+    // Generar reporte mejorado
     const generarReporte = () => {
-        // Implementación básica - en producción usarías una librería como jsPDF o exceljs
-        const datosReporte = ventas.map(venta => ({
-            Fecha: moment(venta.fechaVenta).format('DD/MM/YYYY HH:mm'),
-            Vendedor: venta.vendedor || 'N/A',
-            'Método Pago': venta.metodoPago || 'N/A',
-            Total: `$${venta.total.toFixed(2)}`
-        }));
+        try {
+            const datosReporte = ventas.map(venta => ({
+                Fecha: moment(venta.fechaVenta).format('DD/MM/YYYY HH:mm'),
+                Vendedor: venta.vendedor || 'N/A',
+                'Método Pago': venta.metodoPago || 'N/A',
+                Total: `$${venta.total.toFixed(2)}`,
+                Productos: venta.productos?.map(p => p.nombre).join(', ') || 'N/A'
+            }));
 
-        console.log('Datos para reporte:', datosReporte);
-        alert('Función de generar reporte activada. Ver consola para los datos.');
+            console.table(datosReporte);
+            notification.success({
+                message: 'Reporte generado',
+                description: 'Los datos del reporte están disponibles en la consola'
+            });
+        } catch (error) {
+            console.error('Error generando reporte:', error);
+            notification.error({
+                message: 'Error',
+                description: 'No se pudo generar el reporte'
+            });
+        }
     };
 
-    // Preparar datos para Highcharts
-    const prepararDatosGrafica = () => {
-        if (!ventas.length) return [];
-
-        // Agrupar ventas por día
-        const ventasPorDia = ventas.reduce((acc, venta) => {
+    // Preparar datos para gráficas
+    const prepararDatosGrafica = useCallback(() => {
+        return ventas.reduce((acc, venta) => {
             const fecha = moment(venta.fechaVenta).format('YYYY-MM-DD');
-            if (!acc[fecha]) {
-                acc[fecha] = 0;
-            }
-            acc[fecha] += venta.total;
+            acc[fecha] = (acc[fecha] || 0) + venta.total;
             return acc;
         }, {});
+    }, [ventas]);
 
-        return Object.entries(ventasPorDia).map(([fecha, total]) => ({
-            name: fecha,
-            y: total
-        }));
-    };
-
-    const prepararDatosMetodosPago = () => {
-        if (!ventas.length) return [];
-
-        const ventasPorMetodo = ventas.reduce((acc, venta) => {
+    const prepararDatosMetodosPago = useCallback(() => {
+        return ventas.reduce((acc, venta) => {
             const metodo = venta.metodoPago || 'Desconocido';
-            if (!acc[metodo]) {
-                acc[metodo] = 0;
-            }
-            acc[metodo] += venta.total;
+            acc[metodo] = (acc[metodo] || 0) + venta.total;
             return acc;
         }, {});
+    }, [ventas]);
 
-        return Object.entries(ventasPorMetodo).map(([metodo, total]) => ({
-            name: metodo,
-            y: total
-        }));
-    };
-
-    // Configuración de Highcharts para gráfica de ventas por día
+    // Configuraciones de Highcharts
     const opcionesGraficaVentas = {
-        title: {
-            text: 'Ventas por Día'
-        },
-        xAxis: {
-            type: 'category'
-        },
-        yAxis: {
-            title: {
-                text: 'Monto Total ($)'
-            }
-        },
+        title: { text: 'Ventas por Día' },
+        xAxis: { type: 'category' },
+        yAxis: { title: { text: 'Monto Total ($)' } },
         series: [{
             name: 'Ventas',
             type: 'column',
             colorByPoint: true,
-            data: prepararDatosGrafica(),
+            data: Object.entries(prepararDatosGrafica()).map(([fecha, total]) => ({
+                name: fecha,
+                y: total
+            })),
         }],
         plotOptions: {
             column: {
@@ -194,15 +192,15 @@ const Graficas = () => {
         }
     };
 
-    // Configuración de Highcharts para gráfica de métodos de pago
     const opcionesGraficaMetodosPago = {
-        title: {
-            text: 'Ventas por Método de Pago'
-        },
+        title: { text: 'Ventas por Método de Pago' },
         series: [{
             name: 'Método de Pago',
             type: 'pie',
-            data: prepararDatosMetodosPago()
+            data: Object.entries(prepararDatosMetodosPago()).map(([metodo, total]) => ({
+                name: metodo,
+                y: total
+            }))
         }],
         plotOptions: {
             pie: {
@@ -216,31 +214,37 @@ const Graficas = () => {
         }
     };
 
-    // Columnas para la tabla de resumen
+    // Columnas para la tabla
     const columnas = [
         {
             title: 'Fecha',
             dataIndex: 'fechaVenta',
             key: 'fechaVenta',
-            render: (text) => moment(text).format('DD/MM/YYYY HH:mm')
+            render: text => moment(text).format('DD/MM/YYYY HH:mm'),
+            sorter: (a, b) => moment(a.fechaVenta).unix() - moment(b.fechaVenta).unix()
         },
         {
             title: 'Vendedor',
             dataIndex: 'vendedor',
             key: 'vendedor',
-            render: (text) => text || 'N/A'
+            render: text => text || 'N/A',
+            filters: vendedores.map(v => ({ text: v.nombre, value: v.nombre })),
+            onFilter: (value, record) => record.vendedor === value
         },
         {
             title: 'Método Pago',
             dataIndex: 'metodoPago',
             key: 'metodoPago',
-            render: (text) => text || 'N/A'
+            render: text => text || 'N/A',
+            filters: metodosPago.map(m => ({ text: m.metodo, value: m.metodo })),
+            onFilter: (value, record) => record.metodoPago === value
         },
         {
             title: 'Total',
             dataIndex: 'total',
             key: 'total',
-            render: (text) => `$${text.toFixed(2)}`
+            render: text => `$${Number(text).toFixed(2)}`,
+            sorter: (a, b) => a.total - b.total
         }
     ];
 
@@ -248,12 +252,12 @@ const Graficas = () => {
         <div style={{ padding: '20px' }}>
             <Card title="Filtros de Reporte" style={{ marginBottom: '20px' }}>
                 <Row gutter={16}>
-                    <Col span={6}>
+                    <Col xs={24} sm={12} md={8} lg={6}>
                         <Select
                             style={{ width: '100%' }}
                             placeholder="Seleccione período"
                             value={filtros.periodo}
-                            onChange={(value) => handleFiltroChange('periodo', value)}
+                            onChange={value => handleFiltroChange('periodo', value)}
                         >
                             <Option value="hoy">Hoy</Option>
                             <Option value="semana">Esta semana</Option>
@@ -264,40 +268,41 @@ const Graficas = () => {
                     </Col>
 
                     {filtros.periodo === 'personalizado' && (
-                        <Col span={6}>
+                        <Col xs={24} sm={12} md={8} lg={6}>
                             <RangePicker
                                 style={{ width: '100%' }}
-                                onChange={(dates) => handleFiltroChange('rangoFechas', dates)}
+                                value={filtros.rangoFechas}
+                                onChange={dates => handleFiltroChange('rangoFechas', dates)}
                             />
                         </Col>
                     )}
 
-                    <Col span={6}>
+                    <Col xs={24} sm={12} md={8} lg={6}>
                         <Select
                             style={{ width: '100%' }}
                             placeholder="Filtrar por vendedor"
                             allowClear
                             value={filtros.vendedor}
-                            onChange={(value) => handleFiltroChange('vendedor', value)}
-                        >
-                            {vendedores.map((v, i) => (
-                                <Option key={v.nombre} value={v.nombre}>{v.nombre}</Option>
-                            ))}
-                        </Select>
+                            onChange={value => handleFiltroChange('vendedor', value)}
+                            options={vendedores.map(v => ({
+                                value: v.nombre,
+                                label: v.nombre
+                            }))}
+                        />
                     </Col>
 
-                    <Col span={6}>
+                    <Col xs={24} sm={12} md={8} lg={6}>
                         <Select
                             style={{ width: '100%' }}
                             placeholder="Filtrar por método de pago"
                             allowClear
                             value={filtros.metodoPago}
-                            onChange={(value) => handleFiltroChange('metodoPago', value)}
-                        >
-                            {metodosPago.map((m, i) => (
-                                <Option key={m.metodo} value={m.metodo}>{m.metodo}</Option>
-                            ))}
-                        </Select>
+                            onChange={value => handleFiltroChange('metodoPago', value)}
+                            options={metodosPago.map(m => ({
+                                value: m.metodo,
+                                label: m.metodo
+                            }))}
+                        />
                     </Col>
                 </Row>
 
@@ -316,13 +321,13 @@ const Graficas = () => {
             </Card>
 
             {loading ? (
-                <Spin size="large" />
+                <Spin size="large" style={{ display: 'block', margin: '20px auto' }} />
             ) : (
                 <>
                     {ventas.length > 0 ? (
                         <>
                             <Row gutter={[16, 16]} style={{ marginBottom: '20px' }}>
-                                <Col span={12}>
+                                <Col xs={24} lg={12}>
                                     <Card>
                                         <HighchartsReact
                                             highcharts={Highcharts}
@@ -330,7 +335,7 @@ const Graficas = () => {
                                         />
                                     </Card>
                                 </Col>
-                                <Col span={12}>
+                                <Col xs={24} lg={12}>
                                     <Card>
                                         <HighchartsReact
                                             highcharts={Highcharts}
@@ -345,7 +350,11 @@ const Graficas = () => {
                                     columns={columnas}
                                     dataSource={ventas}
                                     rowKey="id"
-                                    pagination={{ pageSize: 5 }}
+                                    pagination={{
+                                        pageSize: 5,
+                                        showSizeChanger: true,
+                                        pageSizeOptions: ['5', '10', '20', '50']
+                                    }}
                                     scroll={{ x: true }}
                                 />
                             </Card>
