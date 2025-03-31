@@ -3,6 +3,7 @@ import { Card, Button, InputNumber, Space, Row, Col, Divider, Typography, Modal,
 import { ShoppingCartOutlined, DollarOutlined, CheckOutlined } from '@ant-design/icons';
 import apiClient from '../../services/interceptor'; // Asegúrate de que la ruta sea correcta
 import './components/styles/producto.css';
+import EventEmitter from './components/EvenEmitter';
 
 const { Title, Text } = Typography;
 
@@ -35,10 +36,42 @@ const Producto = () => {
         };
 
         fetchProducts();
+
+        // Escucha el evento de actualización de stock
+        const handleStockUpdated = (updatedProducts) => {
+            setProductos(prevProductos =>
+                prevProductos.map(product => {
+                    const vendido = updatedProducts.find(p => p.id === product.id);
+                    if (vendido) {
+                        return {
+                            ...product,
+                            cantidad: product.cantidad - vendido.cantidadSeleccionada
+                        };
+                    }
+                    return product;
+                })
+            );
+        };
+
+        EventEmitter.subscribe('stockUpdated', handleStockUpdated);
+
+        return () => {
+            // Limpia el listener
+            EventEmitter.events['stockUpdated'] = EventEmitter.events['stockUpdated'].filter(
+                callback => callback !== handleStockUpdated
+            );
+        };
     }, []);
 
     // Manejar cambio de cantidad
     const handleQuantityChange = (productId, value) => {
+        const product = productos.find(p => p.id === productId);
+
+        if (value > product.cantidad) {
+            message.warning(`La cantidad ingresada excede el stock disponible (${product.cantidad}).`);
+            return;
+        }
+
         setProductos(prevProducts =>
             prevProducts.map(product =>
                 product.id === productId
@@ -94,6 +127,15 @@ const Producto = () => {
         setSaleLoading(true);
 
         try {
+            // Validar que ningún producto exceda el stock disponible
+            const productosExcedidos = selectedProducts.filter(p => p.cantidadSeleccionada > p.cantidad);
+            if (productosExcedidos.length > 0) {
+                const nombresProductos = productosExcedidos.map(p => p.nombre).join(', ');
+                message.error(`La cantidad seleccionada excede el stock disponible para: ${nombresProductos}`);
+                setSaleLoading(false);
+                return;
+            }
+
             const ventaData = {
                 productos: selectedProducts.map(p => ({
                     productoId: p.id,
@@ -107,23 +149,19 @@ const Producto = () => {
                 total
             };
 
+            console.log("Datos de venta preparados:", ventaData);
+
             const response = await apiClient.post('/ventas', ventaData);
 
+            // Emite un evento para actualizar el stock
+            EventEmitter.emit('stockUpdated', selectedProducts);
+
             message.success('Venta registrada con éxito');
-            // Limpiar selección y recargar productos
             setSelectedProducts([]);
             setProductos(prev =>
                 prev.map(p => ({ ...p, cantidadSeleccionada: 0 }))
             );
             setIsModalVisible(false);
-
-            // Recargar productos para actualizar cantidades
-            const productsResponse = await apiClient.get('/productos-activos');
-            const productsData = productsResponse.data.map(product => ({
-                ...product,
-                cantidadSeleccionada: 0
-            }));
-            setProductos(productsData);
 
         } catch (error) {
             console.error("Error al procesar venta: ", error);

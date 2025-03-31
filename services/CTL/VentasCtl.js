@@ -86,7 +86,7 @@ const registrarVenta = async (req, res) => {
         // Crear objeto de venta
         const ventaData = {
             productos: productos.map(p => ({
-                productoId: p.id,
+                productoId: p.productoId,
                 nombre: p.nombre,
                 precioUnitario: p.precioUnitario,
                 cantidad: p.cantidad,
@@ -108,32 +108,33 @@ const registrarVenta = async (req, res) => {
         await db.runTransaction(async (transaction) => {
             log("Iniciando transacción...");
 
-            // 1. Verificar y actualizar inventario
-            for (const producto of productos) {
-                const productoRef = db.collection('inventario').doc(producto.id);
-                const productoDoc = await transaction.get(productoRef);
+            // 1. Leer todos los documentos necesarios antes de realizar cualquier escritura
+            const productosRefs = productos.map(p => db.collection('inventario').doc(p.productoId));
+            const productosDocs = await Promise.all(productosRefs.map(ref => transaction.get(ref)));
 
+            // 2. Verificar y actualizar inventario
+            productosDocs.forEach((productoDoc, index) => {
                 if (!productoDoc.exists) {
-                    throw new Error(`Producto ${producto.id} no encontrado`);
+                    throw new Error(`Producto ${productos[index].productoId} no encontrado`);
                 }
 
                 const productoData = productoDoc.data();
-                const nuevaCantidad = productoData.cantidad - producto.cantidad;
+                const nuevaCantidad = productoData.cantidad - productos[index].cantidad;
 
                 if (nuevaCantidad < 0) {
                     throw new Error(`No hay suficiente stock para ${productoData.nombre}`);
                 }
 
-                transaction.update(productoRef, {
+                transaction.update(productosRefs[index], {
                     cantidad: nuevaCantidad,
                     fechaActualizacion: admin.firestore.FieldValue.serverTimestamp()
                 });
 
                 log(`Actualizado inventario para ${productoData.nombre}: ${productoData.cantidad} -> ${nuevaCantidad}`);
-            }
+            });
 
-            // 2. Registrar la venta
-            const ventaRef = db.collection('ventas').doc();
+            // 3. Registrar la venta
+            const ventaRef = db.collection('ventas').doc(); // Genera un ID automáticamente
             transaction.set(ventaRef, ventaData);
             log(`Venta registrada con ID: ${ventaRef.id}`);
         });
@@ -312,4 +313,4 @@ module.exports = {
     registrarVenta,
     getHistorialVentas,
     getVentaById
-};  
+};
