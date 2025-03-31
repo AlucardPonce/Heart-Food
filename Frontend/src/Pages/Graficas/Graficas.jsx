@@ -1,15 +1,59 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Row, Col, DatePicker, Select, Button, Spin, Divider, Table, notification } from 'antd';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import apiClient from '../../services/interceptor';
 import moment from 'moment';
 import { DownloadOutlined } from '@ant-design/icons';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
+const useWebSocketData = () => {
+    const [realTimeData, setRealTimeData] = useState(null);
+
+    useEffect(() => {
+        const ws = new WebSocket('wss://ws.postman-echo.com/raw');
+
+        ws.onopen = () => {
+            console.log('Conexión WebSocket establecida');
+            ws.send('Solicito datos de ventas'); // Envía mensaje inicial
+        };
+
+        ws.onmessage = (e) => {
+            // Simulando datos (en producción vendrían de tu backend)
+            const mockData = {
+                ventas: Math.floor(Math.random() * 1000),
+                timestamp: new Date().toLocaleTimeString()
+            };
+            setRealTimeData(mockData);
+        };
+
+        return () => ws.close();
+    }, []);
+
+    return realTimeData;
+};
+
 const Graficas = () => {
+
+    const Graficas = () => {
+        const realTimeData = useWebSocketData();
+
+        // Agrega esto donde quieras mostrar los datos:
+        {
+            realTimeData && (
+                <Card title="Datos en Tiempo Real" style={{ marginBottom: 20 }}>
+                    <p>Última venta: ${realTimeData.ventas}</p>
+                    <p>Actualizado: {realTimeData.timestamp}</p>
+                </Card>
+            )
+        }
+    };
+
     const [loading, setLoading] = useState(false);
     const [ventas, setVentas] = useState([]);
     const [vendedores, setVendedores] = useState([]);
@@ -21,18 +65,18 @@ const Graficas = () => {
         periodo: 'hoy'
     });
 
-    // Función para cargar opciones de filtros
+    const reportRef = useRef(null);
+    const [generatingPDF, setGeneratingPDF] = useState(false);
+
     const cargarOpcionesFiltros = useCallback(async () => {
         try {
             const response = await apiClient.get('/ventas');
             const ventasData = response.data.data || [];
-            
-            // Extraer y normalizar vendedores únicos
+
             const vendedoresUnicos = Array.from(
                 new Set(ventasData.map(v => v.vendedor).filter(Boolean))
             ).map(v => ({ nombre: v }));
-            
-            // Extraer y normalizar métodos de pago únicos
+
             const metodosPagoUnicos = Array.from(
                 new Set(ventasData.map(v => v.metodoPago).filter(Boolean))
             ).map(m => ({ metodo: m }));
@@ -48,13 +92,11 @@ const Graficas = () => {
         }
     }, []);
 
-    // Función para cargar ventas con filtros aplicados
     const cargarVentas = useCallback(async () => {
         setLoading(true);
         try {
             let fechaInicio, fechaFin;
 
-            // Determinar rango de fechas según el periodo seleccionado
             switch (filtros.periodo) {
                 case 'hoy':
                     fechaInicio = moment().startOf('day');
@@ -86,7 +128,6 @@ const Graficas = () => {
             const response = await apiClient.get('/ventas', { params: { fechaInicio, fechaFin } });
             let ventasFiltradas = response.data.data || [];
 
-            // Filtrar por vendedor y método de pago en el cliente
             if (filtros.vendedor) {
                 ventasFiltradas = ventasFiltradas.filter(venta => venta.vendedor === filtros.vendedor);
             }
@@ -106,7 +147,6 @@ const Graficas = () => {
         }
     }, [filtros]);
 
-    // Efectos para carga inicial y cuando cambian los filtros
     useEffect(() => {
         cargarOpcionesFiltros();
     }, [cargarOpcionesFiltros]);
@@ -115,42 +155,99 @@ const Graficas = () => {
         cargarVentas();
     }, [cargarVentas]);
 
-    // Manejador de cambios en filtros
     const handleFiltroChange = (key, value) => {
         setFiltros(prev => ({
             ...prev,
             [key]: value,
-            // Resetear rango de fechas si no es personalizado
             ...(key === 'periodo' && value !== 'personalizado' && { rangoFechas: null })
         }));
     };
 
-    // Generar reporte mejorado
-    const generarReporte = () => {
+    const generarReportePDF = async () => {
+        setGeneratingPDF(true);
         try {
-            const datosReporte = ventas.map(venta => ({
-                Fecha: moment(venta.fechaVenta).format('DD/MM/YYYY HH:mm'),
-                Vendedor: venta.vendedor || 'N/A',
-                'Método Pago': venta.metodoPago || 'N/A',
-                Total: `$${venta.total.toFixed(2)}`,
-                Productos: venta.productos?.map(p => p.nombre).join(', ') || 'N/A'
-            }));
+            const pdf = new jsPDF('p', 'pt', 'a4');
 
-            console.table(datosReporte);
+            // Título
+            pdf.setFontSize(20);
+            pdf.setTextColor(40, 40, 40);
+            pdf.text('Reporte de Ventas', pdf.internal.pageSize.getWidth() / 2, 30, { align: 'center' });
+
+            // Filtros aplicados
+            pdf.setFontSize(12);
+            let filtrosText = `Período: ${filtros.periodo.charAt(0).toUpperCase() + filtros.periodo.slice(1)}`;
+            if (filtros.periodo === 'personalizado' && filtros.rangoFechas) {
+                filtrosText += ` (${filtros.rangoFechas[0].format('DD/MM/YYYY')} - ${filtros.rangoFechas[1].format('DD/MM/YYYY')})`;
+            }
+            if (filtros.vendedor) filtrosText += ` | Vendedor: ${filtros.vendedor}`;
+            if (filtros.metodoPago) filtrosText += ` | Método: ${filtros.metodoPago}`;
+
+            pdf.text(filtrosText, 40, 50);
+            pdf.text(`Generado: ${moment().format('DD/MM/YYYY HH:mm')}`, 40, 70);
+
+            let yPosition = 90;
+
+            // Gráfica 1
+            const chart1 = document.querySelector('#chart-ventas-container');
+            if (chart1) {
+                const canvas1 = await html2canvas(chart1, { scale: 2 });
+                const imgData1 = canvas1.toDataURL('image/png');
+                const imgWidth = pdf.internal.pageSize.getWidth() - 80;
+                const imgHeight = (canvas1.height * imgWidth) / canvas1.width;
+                pdf.addImage(imgData1, 'PNG', 40, yPosition, imgWidth, imgHeight);
+                yPosition += imgHeight + 20;
+            }
+
+            // Gráfica 2
+            const chart2 = document.querySelector('#chart-metodos-container');
+            if (chart2) {
+                const canvas2 = await html2canvas(chart2, { scale: 2 });
+                const imgData2 = canvas2.toDataURL('image/png');
+                const imgWidth = pdf.internal.pageSize.getWidth() - 80;
+                const imgHeight = (canvas2.height * imgWidth) / canvas2.width;
+                pdf.addImage(imgData2, 'PNG', 40, yPosition, imgWidth, imgHeight);
+                yPosition += imgHeight + 20;
+            }
+
+            autoTable(pdf, {
+                head: [['Fecha', 'Vendedor', 'Método Pago', 'Total']],
+                body: ventas.map(venta => [
+                    moment(venta.fechaVenta).format('DD/MM/YYYY HH:mm'),
+                    venta.vendedor || 'N/A',
+                    venta.metodoPago || 'N/A',
+                    `$${venta.total.toFixed(2)}`
+                ]),
+                startY: yPosition,
+                margin: { left: 40 },
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 5
+                },
+                headStyles: {
+                    fillColor: [41, 128, 185],
+                    textColor: 255,
+                    fontStyle: 'bold'
+                }
+            });
+
+            pdf.save(`reporte_ventas_${moment().format('YYYYMMDD_HHmmss')}.pdf`);
+
             notification.success({
-                message: 'Reporte generado',
-                description: 'Los datos del reporte están disponibles en la consola'
+                message: 'Éxito',
+                description: 'Reporte generado correctamente'
             });
         } catch (error) {
-            console.error('Error generando reporte:', error);
+            console.error('Error generando PDF:', error);
             notification.error({
                 message: 'Error',
-                description: 'No se pudo generar el reporte'
+                description: 'No se pudo generar el reporte PDF'
             });
+        } finally {
+            setGeneratingPDF(false);
         }
     };
 
-    // Preparar datos para gráficas
+
     const prepararDatosGrafica = useCallback(() => {
         return ventas.reduce((acc, venta) => {
             const fecha = moment(venta.fechaVenta).format('YYYY-MM-DD');
@@ -167,7 +264,6 @@ const Graficas = () => {
         }, {});
     }, [ventas]);
 
-    // Configuraciones de Highcharts
     const opcionesGraficaVentas = {
         title: { text: 'Ventas por Día' },
         xAxis: { type: 'category' },
@@ -214,7 +310,6 @@ const Graficas = () => {
         }
     };
 
-    // Columnas para la tabla
     const columnas = [
         {
             title: 'Fecha',
@@ -249,7 +344,7 @@ const Graficas = () => {
     ];
 
     return (
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: '20px' }} ref={reportRef}>
             <Card title="Filtros de Reporte" style={{ marginBottom: '20px' }}>
                 <Row gutter={16}>
                     <Col xs={24} sm={12} md={8} lg={6}>
@@ -312,10 +407,11 @@ const Graficas = () => {
                     <Button
                         type="primary"
                         icon={<DownloadOutlined />}
-                        onClick={generarReporte}
-                        disabled={ventas.length === 0}
+                        onClick={generarReportePDF}
+                        disabled={ventas.length === 0 || generatingPDF}
+                        loading={generatingPDF}
                     >
-                        Generar Reporte
+                        {generatingPDF ? 'Generando PDF...' : 'Descargar Reporte PDF'}
                     </Button>
                 </Row>
             </Card>
@@ -329,18 +425,22 @@ const Graficas = () => {
                             <Row gutter={[16, 16]} style={{ marginBottom: '20px' }}>
                                 <Col xs={24} lg={12}>
                                     <Card>
-                                        <HighchartsReact
-                                            highcharts={Highcharts}
-                                            options={opcionesGraficaVentas}
-                                        />
+                                        <div id="chart-ventas-container">
+                                            <HighchartsReact
+                                                highcharts={Highcharts}
+                                                options={opcionesGraficaVentas}
+                                            />
+                                        </div>
                                     </Card>
                                 </Col>
                                 <Col xs={24} lg={12}>
                                     <Card>
-                                        <HighchartsReact
-                                            highcharts={Highcharts}
-                                            options={opcionesGraficaMetodosPago}
-                                        />
+                                        <div id="chart-metodos-container">
+                                            <HighchartsReact
+                                                highcharts={Highcharts}
+                                                options={opcionesGraficaMetodosPago}
+                                            />
+                                        </div>
                                     </Card>
                                 </Col>
                             </Row>

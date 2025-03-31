@@ -44,3 +44,29 @@ app.get('/validate-token', verifyToken, (req, res) => {
 app.post('/validate', validateUser);
 app.post('/register', registerUser);
 app.post('/reset-password', reset);
+
+// ==================== 🔴 IMPLEMENTACIÓN DE SSE 🔴 ====================
+
+let clients = []; 
+
+app.get('/events', (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    clients.push(res);
+
+    req.on("close", () => {
+        clients = clients.filter(client => client !== res);
+    });
+});
+
+function sendUpdate(data) {
+    clients.forEach(client => client.write(`data: ${JSON.stringify(data)}\n\n`));
+}
+
+setInterval(() => {
+    sendUpdate({ message: "Nueva venta realizada", timestamp: Date.now() });
+}, 10000);
+
+
