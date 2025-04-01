@@ -15,7 +15,12 @@ const { registrarVenta, getHistorialVentas, getProductosActivos, getVentaById } 
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: 'https://heart-food-front.onrender.com', // Permite solo tu frontend
+    methods: 'GET,POST,PUT,DELETE',
+    allowedHeaders: 'Content-Type,Authorization'
+}));
+
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
