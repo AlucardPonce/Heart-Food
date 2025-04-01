@@ -2,7 +2,12 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 require("dotenv").config();
-const { validateUser, registerUser, reset } = require("./CTL/UserCtl");
+const { validateUser, 
+    registerUser, 
+    reset, 
+    verifyOTP,
+    toggleTwoFactorAuth,
+    verifyResetOTP } = require("./CTL/UserCtl");
 const { insertSucursal, getSucursales, updateSucursal } = require("./CTL/MapCtl");
 const { verifyToken } = require("./Middleware/mid");
 const { insertProducto, getProductos, updateProducto, getProductoById, insertCategoria, getCategorias, deleteProductoPermanente, toggleStatusProducto } = require("./CTL/InventarioCtl");
@@ -44,6 +49,10 @@ app.get('/validate-token', verifyToken, (req, res) => {
 app.post('/validate', validateUser);
 app.post('/register', registerUser);
 app.post('/reset-password', reset);
+app.post('/verify-otp', verifyOTP);
+app.post('/verify-reset-otp', verifyResetOTP);
+app.post('/toggle-2fa', toggleTwoFactorAuth);
+app.post('/toggle-2fa/verify', verifyToken, toggleTwoFactorAuth);
 
 // ==================== 🔴 IMPLEMENTACIÓN DE SSE 🔴 ====================
 
