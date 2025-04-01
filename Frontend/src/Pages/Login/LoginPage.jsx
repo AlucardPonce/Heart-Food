@@ -14,6 +14,7 @@ const LoginPage = () => {
     const [secretUrl, setSecretUrl] = useState("");
     const [otp, setOtp] = useState("");
     const [username, setUsername] = useState("");
+    const [password, setPassword] = useState(""); // Nuevo estado para la contraseña
     const registerFormRef = useRef(null);
     const navigate = useNavigate();
 
@@ -27,6 +28,7 @@ const LoginPage = () => {
         setLoading(true);
         setFormError("");
         setUsername(values.username);
+        setPassword(values.password); // Guarda la contraseña ingresada
 
         try {
             const response = await axios.post(`${API_URL}/validate`, values);
@@ -51,25 +53,25 @@ const LoginPage = () => {
     };
 
     const verifyOTP = async () => {
-        setLoading(true);
+        console.log("Enviando OTP:", otp, "para el usuario:", username);
         try {
             const response = await axios.post(`${API_URL}/validate`, {
                 username,
-                password: registerFormRef.current?.getFieldValue('password'),
+                password, // Usa el estado de la contraseña
                 otpToken: otp
             });
+            console.log("Respuesta del servidor:", response.data);
 
             if (response.data.statusCode === 200) {
                 message.success("Autenticación exitosa");
-                localStorage.setItem("token", response.data.data.token);
-                navigate("/home");
+                localStorage.setItem("token", response.data.data.token); // Guarda el token en localStorage
+                navigate("/home"); // Redirige al usuario a la página principal
             } else {
-                message.error(response.data.intMessage || "Error en la autenticación");
+                message.error(response.data.intMessage || "Error al verificar OTP");
             }
         } catch (error) {
-            message.error(error.response?.data?.message || "Error al verificar OTP");
-        } finally {
-            setLoading(false);
+            console.error("Error al verificar OTP:", error.response?.data || error.message);
+            message.error(error.response?.data?.intMessage || "Error al verificar OTP");
         }
     };
 

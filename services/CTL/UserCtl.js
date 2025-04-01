@@ -96,6 +96,7 @@ const reset = async (req, res) => {
                 step: 300, // 5 minutos
                 digits: 6
             });
+            console.log("OTP generado:", tempToken);
 
             await sendTemporaryOTP(email, tempToken);
 
@@ -141,6 +142,10 @@ const reset = async (req, res) => {
 const verifyResetOTP = async (req, res) => {
     const { email, otpToken, newPassword } = req.body;
 
+    if (!/^\d{6}$/.test(otpToken)) {
+        return res.status(400).json({ intMessage: "Formato de OTP inválido" });
+    }
+
     try {
         const userSnapshot = await db.collection("USERS").where("gmail", "==", email).get();
 
@@ -159,7 +164,13 @@ const verifyResetOTP = async (req, res) => {
             encoding: 'base32',
             token: otpToken,
             step: 300, // 5 minutos
-            window: 1
+            window: 2 // Permite un margen de 2 intervalos de tiempo
+        });
+
+        console.log({
+            otpToken,
+            secret: userData.twoFactorSecret,
+            verified
         });
 
         if (!verified) {
@@ -199,6 +210,8 @@ const verifyResetOTP = async (req, res) => {
 // Controlador para login con OTP
 const validateUser = async (req, res) => {
     const { username, password, otpToken } = req.body;
+
+    console.log("Datos recibidos:", { username, password, otpToken });
 
     // Validación básica de los parámetros de entrada
     if (!username || !password) {
@@ -257,6 +270,12 @@ const validateUser = async (req, res) => {
                 encoding: 'base32',
                 token: otpToken,
                 window: 1
+            });
+
+            console.log({
+                otpToken,
+                secret: user.twoFactorSecret,
+                verified
             });
 
             if (!verified) {
@@ -320,6 +339,12 @@ const verifyOTP = async (req, res) => {
             encoding: 'base32',
             token,
             window: 1
+        });
+
+        console.log({
+            token,
+            secret: user.twoFactorSecret,
+            verified
         });
 
         if (verified) {
@@ -492,11 +517,21 @@ const toggleTwoFactorAuth = async (req, res) => {
                 });
             }
 
+            if (!/^\d{6}$/.test(otpToken)) {
+                return res.status(400).json({ intMessage: "Formato de OTP inválido" });
+            }
+
             const verified = speakeasy.totp.verify({
                 secret: user.twoFactorSecret,
                 encoding: 'base32',
                 token: otpToken,
                 window: 1
+            });
+
+            console.log({
+                otpToken,
+                secret: user.twoFactorSecret,
+                verified
             });
 
             if (!verified) {
