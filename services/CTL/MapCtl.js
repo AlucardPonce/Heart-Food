@@ -182,5 +182,62 @@ const getSucursales = async (req, res) => {
     }
 };
 
+/**
+ * Controlador para eliminar una sucursal.
+ */
+const deleteSucursal = async (req, res) => {
+    try {
+        const { id } = req.params; // Obtener el ID desde los parámetros de la URL
+
+        console.log(`Eliminando sucursal con ID: ${id}`);
+
+        // Validar que el ID exista
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: 'El ID de la sucursal es requerido',
+            });
+        }
+
+        // Verificar si la sucursal existe
+        const sucursalRef = db.collection('sucursales').doc(id);
+        const sucursalSnapshot = await sucursalRef.get();
+
+        if (!sucursalSnapshot.exists) {
+            return res.status(404).json({
+                success: false,
+                message: 'La sucursal no existe',
+            });
+        }
+
+        // Eliminar el documento de Firestore
+        await sucursalRef.delete();
+
+        console.log(`Sucursal con ID ${id} eliminada correctamente`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Sucursal eliminada correctamente',
+        });
+
+    } catch (error) {
+        console.error('Error al eliminar la sucursal:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error en el servidor',
+            errorDetails: {
+                code: error.code,
+                message: error.message,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            },
+        });
+    }
+};
+
 // Exportar los controladores
-module.exports = { insertSucursal, getSucursales, updateSucursal };
+module.exports = { 
+    insertSucursal, 
+    getSucursales, 
+    updateSucursal, 
+    deleteSucursal 
+};

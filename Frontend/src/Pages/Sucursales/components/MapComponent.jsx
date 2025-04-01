@@ -1,214 +1,96 @@
-import React, { useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Input, Button, Space, Typography, Divider, message } from "antd";
-import { SearchOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
-import "leaflet/dist/leaflet.css";
-import api from '../../../services/interceptor';
+import 'leaflet/dist/leaflet.css';
 
-const { Text, Title } = Typography;
-
-// Configuración del icono del marcador
+// Fix para los iconos de marcadores
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const MapComponent = ({ markers, setMarkers, setTableData, setActiveMarker, setIsModalVisible }) => {
+const MapComponent = ({ sucursales, onMapClick, selectedSucursal }) => {
+    const mapRef = useRef(null);
+    const mapInstance = useRef(null);
+    const markersRef = useRef([]);
+    const [mapReady, setMapReady] = useState(false);
 
-    const [searchQuery, setSearchQuery] = useState("");
-    const mapRef = useRef();
+    // Inicializar el mapa
+    useEffect(() => {
+        if (!mapRef.current) return;
 
-    const handleMapClick = (e) => {
-        // Verificar que el clic no sea en un marcador existente
-        if (e.originalEvent.target.tagName === 'DIV' || e.originalEvent.target.tagName === 'IMG') {
-            return;
-        }
+        // Crear instancia del mapa
+        const map = L.map(mapRef.current).setView([19.4326, -99.1332], 13);
 
-        const newMarker = {
-            id: `temp-${Date.now()}`,
-            nombreSucursal: "Nueva Sucursal",
-            position: [e.latlng.lat, e.latlng.lng],
-            calle: "",
-            colonia: "",
-            municipio: "",
-            estado: "",
-            cp: "",
-            numero: "",
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Manejar clics en el mapa
+        map.on('click', (e) => {
+            onMapClick(e.latlng);
+        });
+
+        // Guardar instancia del mapa
+        mapInstance.current = map;
+        setMapReady(true);
+
+        // Limpiar al desmontar
+        return () => {
+            map.remove();
+            mapInstance.current = null;
         };
+    }, []);
 
-        setMarkers(prevMarkers => [...(prevMarkers || []), newMarker]);
-        setTableData(prevData => [...(prevData || []), newMarker]);
-        setActiveMarker(newMarker);
-        setIsModalVisible(true);
-    };
+    // Actualizar marcadores cuando cambian las sucursales o el mapa está listo
+    useEffect(() => {
+        if (!mapReady || !mapInstance.current || !sucursales) return;
 
-    // Actualizar la ubicación en la base de datos al arrastrar el pin
-    const handleMarkerDrag = async (id, newPosition) => {
-        try {
-            const payload = {
-                id,
-                position: {
-                    lat: newPosition[0],
-                    lng: newPosition[1],
-                },
-            };
+        const map = mapInstance.current;
 
-            await api.post('/sucursales/update', payload);
+        // Limpiar marcadores anteriores
+        markersRef.current.forEach(marker => {
+            if (marker && marker.remove) {
+                marker.remove();
+            }
+        });
+        markersRef.current = [];
 
-            const updatedMarkers = markers.map(marker =>
-                marker.id === id ? { ...marker, position: newPosition } : marker
-            );
-
-            setMarkers(updatedMarkers);
-            setTableData(updatedMarkers);
-            message.success("Ubicación actualizada correctamente");
-        } catch (error) {
-            console.error("Error al actualizar la ubicación:", error);
-            message.error("Error al actualizar la ubicación");
-        }
-    };
-
-    // Eliminar un pin y actualizar los nombres de los pines
-    const handleDeleteMarker = async (id) => {
-        try {
-            await api.post('/sucursales/delete', { id });
-
-            const updatedMarkers = markers.filter(marker => marker.id !== id);
-            setMarkers(updatedMarkers);
-            setTableData(updatedMarkers);
-            message.success("Sucursal eliminada correctamente");
-        } catch (error) {
-            console.error("Error al eliminar la sucursal:", error);
-            message.error("Error al eliminar la sucursal");
-        }
-    };
-
-    const onFinish = async (values) => {
-        try {
-            // Asegúrate de que markers sea un array válido
-            if (!Array.isArray(markers)) {
-                throw new Error("El estado markers no es un array válido.");
+        // Agregar nuevos marcadores
+        sucursales.forEach(sucursal => {
+            if (!sucursal.position || !sucursal.position.lat || !sucursal.position.lng) {
+                console.warn('Sucursal sin posición válida:', sucursal);
+                return;
             }
 
-            await handleSave(values); // Llama a la función handleSave del componente padre
-        } catch (error) {
-            console.error("Error al guardar la sucursal:", error);
-            message.error("Error al guardar la sucursal");
-        }
-    };
+            const marker = L.marker([sucursal.position.lat, sucursal.position.lng], {
+                title: sucursal.nombreSucursal
+            })
+                .addTo(map)
+                .bindPopup(`<b>${sucursal.nombreSucursal}</b><br>${sucursal.direccion || ''}`);
+
+            markersRef.current.push(marker);
+
+            // Resaltar marcador seleccionado
+            if (selectedSucursal && selectedSucursal.id === sucursal.id) {
+                marker.openPopup();
+            }
+        });
+    }, [sucursales, selectedSucursal, mapReady]);
 
     return (
-        <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-            <Space style={{ width: "100%", marginBottom: 16 }}>
-                <Input
-                    placeholder="Buscar dirección, ciudad o lugar..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    allowClear
-                    style={{ height: 40 }}
-                />
-                <Button
-                    type="primary"
-                    icon={<SearchOutlined />}
-                    style={{ height: 40 }}
-                >
-                    Buscar
-                </Button>
-            </Space>
-
-            <MapContainer
-                center={[19.4326, -99.1332]} // Coordenadas iniciales
-                zoom={5}
-                style={{
-                    height: "400px",
-                    width: "100%",
-                    borderRadius: 8,
-                    marginBottom: 16,
-                    border: '1px solid #f0f0f0'
-                }}
-                whenCreated={(map) => { mapRef.current = map; }}
-                onClick={handleMapClick} // Configura el evento onClick
-            >
-                <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                {markers.map(marker => (
-                    <Marker
-                        key={marker.id}
-                        position={marker.position}
-                        draggable={true}
-                        eventHandlers={{
-                            dragend: (e) => {
-                                const newPosition = [e.target.getLatLng().lat, e.target.getLatLng().lng];
-                                handleMarkerDrag(marker.id, newPosition);
-                            },
-                            click: () => {
-                                setActiveMarker(marker);
-                                setIsModalVisible(true);
-                            }
-                        }}
-                    >
-                        <Popup minWidth={300}>
-                            <div>
-                                <Title level={5} style={{ marginBottom: 8 }}>{marker.nombreSucursal}</Title>
-                                <Divider style={{ margin: "8px 0" }} />
-
-                                <Text strong>Calle: </Text>
-                                <Text>{marker.calle || "No especificada"}</Text>
-                                <br />
-
-                                <Text strong>Número: </Text>
-                                <Text>{marker.numero || "No especificado"}</Text>
-                                <br />
-
-                                <Text strong>Colonia: </Text>
-                                <Text>{marker.colonia || "No especificada"}</Text>
-                                <br />
-
-                                <Text strong>Municipio: </Text>
-                                <Text>{marker.municipio || "No especificado"}</Text>
-                                <br />
-
-                                <Text strong>Estado: </Text>
-                                <Text>{marker.estado || "No especificado"}</Text>
-                                <br />
-
-                                <Text strong>Código Postal: </Text>
-                                <Text>{marker.cp || "No especificado"}</Text>
-
-                                <Divider style={{ margin: "12px 0" }} />
-
-                                <Space>
-                                    <Button
-                                        size="small"
-                                        icon={<EditOutlined />}
-                                        onClick={() => {
-                                            setActiveMarker(marker);
-                                            setIsModalVisible(true);
-                                        }}
-                                    >
-                                        Editar
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        icon={<DeleteOutlined />}
-                                        onClick={() => handleDeleteMarker(marker.id)}
-                                        danger
-                                    >
-                                        Eliminar
-                                    </Button>
-                                </Space>
-                            </div>
-                        </Popup>
-                    </Marker>
-                ))}
-            </MapContainer>
-        </div>
+        <div
+            ref={mapRef}
+            style={{
+                height: '500px',
+                width: '100%',
+                position: 'relative', // Añade esto
+                zIndex: 0, // Asegura un z-index bajo
+                backgroundColor: '#f0f0f0'
+            }}
+        />
     );
-};
+}
 
-export default MapComponent;
+    export default MapComponent;

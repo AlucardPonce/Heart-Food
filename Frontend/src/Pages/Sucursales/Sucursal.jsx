@@ -1,178 +1,149 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, message, Spin } from 'antd';
-import { EnvironmentOutlined } from '@ant-design/icons';
+import { Button, Card, Row, Col, message } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { getSucursales, addSucursal, updateSucursal, deleteSucursal } from '../../services/sucursalService';
 import MapComponent from './components/MapComponent';
 import SucursalesTable from './components/SucursalesTable';
-import SucursalFormModal from './components/SucursalFormModal';
-import api from '../../services/interceptor';
+import SearchBar from './components/SearchBar';
+import AddSucursalModal from './components/AddSucursalModal';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-const { Title } = Typography;
+delete L.Icon.Default.prototype._getIconUrl;
 
-const Sucursal = () => {
-    const [markers, setMarkers] = useState([]); // Estado para los pines del mapa
-    const [tableData, setTableData] = useState([]); // Estado para los datos de la tabla
-    const [activeMarker, setActiveMarker] = useState(null); // Estado para el marcador activo
-    const [isModalVisible, setIsModalVisible] = useState(false); // Estado para mostrar/ocultar el modal
-    const [loading, setLoading] = useState(true); // Estado para mostrar el spinner de carga
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
-    // Función para obtener las sucursales desde el backend
-    const fetchSucursales = async () => {
-        try {
-            setLoading(true);
-            const response = await api.get('/sucursales'); // Solicitud al backend
-            const sucursales = response.data.data || [];
+const SucursalPage = () => {
+    const [sucursales, setSucursales] = useState([]);
+    const [filteredSucursales, setFilteredSucursales] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [selectedSucursal, setSelectedSucursal] = useState(null);
+    const [editingSucursal, setEditingSucursal] = useState(null);
 
-            // Formatear los datos para el mapa y la tabla
-            const sucursalesFormatted = sucursales.map((sucursal) => ({
-                ...sucursal,
-                id: sucursal.id,
-                position: [sucursal.position.lat, sucursal.position.lng],
-            }));
-
-            setMarkers(sucursalesFormatted); // Actualizar los pines del mapa
-            updateTableData(sucursalesFormatted); // Actualizar los datos de la tabla
-        } catch (error) {
-            console.error("Error cargando sucursales:", error);
-            message.error("Error al cargar sucursales");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Función para actualizar los datos de la tabla
-    const updateTableData = (markersData) => {
-        setTableData(
-            markersData.map((marker, index) => ({
-                key: marker.id,
-                no: index + 1,
-                nombreSucursal: marker.nombreSucursal,
-                colonia: marker.colonia,
-                municipio: marker.municipio,
-                estado: marker.estado,
-                calle: marker.calle,
-                cp: marker.cp,
-                numero: marker.numero,
-            }))
-        );
-    };
-
-    // Cargar las sucursales al montar el componente
     useEffect(() => {
         fetchSucursales();
     }, []);
 
-    // Función para guardar o actualizar una sucursal
-    const handleSave = async (values) => {
+    const fetchSucursales = async () => {
         try {
             setLoading(true);
-
-            // Formatear los datos para enviarlos al backend
-            const sucursalData = {
-                id: activeMarker?.id, // Incluir el ID si se está actualizando
-                nombreSucursal: values.nombreSucursal,
-                position: {
-                    lat: values.position[0],
-                    lng: values.position[1],
-                },
-                direccion: values.direccion || '',
-                telefono: values.telefono || '',
-                horario: values.horario || '9:00 - 18:00',
-            };
-
-            // Determinar si es una actualización o una nueva sucursal
-            const response = activeMarker?.id
-                ? await api.post('/sucursales/update', sucursalData) // Actualizar sucursal
-                : await api.post('/sucursales', sucursalData); // Crear nueva sucursal
-
-            const savedSucursal = response.data.data;
-
-            // Actualizar el estado local
-            const updatedMarkers = activeMarker?.id
-                ? markers.map((marker) =>
-                    marker.id === activeMarker.id
-                        ? { ...savedSucursal, position: [savedSucursal.position.lat, savedSucursal.position.lng] }
-                        : marker
-                )
-                : [...markers, { ...savedSucursal, position: [savedSucursal.position.lat, savedSucursal.position.lng] }];
-
-            setMarkers(updatedMarkers); // Actualizar los pines del mapa
-            updateTableData(updatedMarkers); // Actualizar los datos de la tabla
-
-            // Mostrar mensaje de éxito
-            message.success(activeMarker?.id ? "Sucursal actualizada correctamente" : "Sucursal creada correctamente");
-
-            // Cerrar el modal
-            setIsModalVisible(false);
+            const data = await getSucursales();
+            setSucursales(data);
+            setFilteredSucursales(data);
         } catch (error) {
-            console.error("Error al guardar la sucursal:", error);
-            message.error("Error al guardar la sucursal");
+            message.error('Error al cargar las sucursales');
         } finally {
             setLoading(false);
         }
     };
 
-    // Función para eliminar una sucursal
+    const handleSearch = (searchText) => {
+        if (!searchText) {
+            setFilteredSucursales(sucursales);
+            return;
+        }
+
+        const filtered = sucursales.filter(sucursal =>
+            sucursal.nombreSucursal.toLowerCase().includes(searchText.toLowerCase()) ||
+            (sucursal.direccion && sucursal.direccion.toLowerCase().includes(searchText.toLowerCase())) ||
+            (sucursal.telefono && sucursal.telefono.includes(searchText))
+        );
+        setFilteredSucursales(filtered);
+    };
+
+    const handleMapClick = (latlng) => {
+        setEditingSucursal({
+            position: { lat: latlng.lat, lng: latlng.lng }
+        });
+        setModalVisible(true);
+    };
+
+    const handleAddSucursal = async (sucursalData, isEditing) => {
+        try {
+            if (isEditing) {
+                await updateSucursal(sucursalData);
+                message.success('Sucursal actualizada correctamente');
+            } else {
+                await addSucursal(sucursalData);
+                message.success('Sucursal agregada correctamente');
+            }
+            fetchSucursales();
+        } catch (error) {
+            message.error('Error al guardar la sucursal');
+        }
+    };
+
     const handleDelete = async (id) => {
         try {
-            setLoading(true);
-            await api.post('/sucursales/delete', { id }); // Solicitud al backend para eliminar
-            const updatedMarkers = markers.filter((marker) => marker.id !== id); // Filtrar los pines
-            setMarkers(updatedMarkers); // Actualizar los pines del mapa
-            updateTableData(updatedMarkers); // Actualizar los datos de la tabla
-            message.success("Sucursal eliminada correctamente");
+            await deleteSucursal(id);
+            message.success('Sucursal eliminada correctamente');
+            fetchSucursales();
         } catch (error) {
-            console.error("Error al eliminar la sucursal:", error);
-            message.error("Error al eliminar la sucursal");
-        } finally {
-            setLoading(false);
+            message.error('Error al eliminar la sucursal');
         }
+    };
+
+    const handleEdit = (sucursal) => {
+        setEditingSucursal(sucursal);
+        setModalVisible(true);
+        setSelectedSucursal(sucursal);
     };
 
     return (
-        <div style={{ padding: 24, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-            {/* Título de la página */}
-            <div style={{ marginBottom: 24, padding: '16px 24px', backgroundColor: '#fff', borderRadius: 8 }}>
-                <Title level={3}>Sucursales</Title>
-            </div>
-
-            {/* Contenido principal */}
-            <Spin spinning={loading} tip="Cargando...">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
-                    {/* Mapa de sucursales */}
-                    <Card>
-                        <Title level={4} style={{ textAlign: "center" }}>
-                            <EnvironmentOutlined /> Mapa de Sucursales
-                        </Title>
-                        <MapComponent
-                            markers={markers}
-                            setMarkers={setMarkers}
-                            setTableData={updateTableData}
-                            setActiveMarker={setActiveMarker}
-                            setIsModalVisible={setIsModalVisible}
+        <div style={{ padding: '24px' }}>
+            <Row gutter={[16, 16]}>
+                <Col span={24}>
+                    <Card
+                        title="Gestión de Sucursales"
+                        extra={
+                            <Button
+                                type="primary"
+                                icon={<PlusOutlined />}
+                                onClick={() => {
+                                    setEditingSucursal(null);
+                                    setModalVisible(true);
+                                }}
+                            >
+                                Agregar Sucursal
+                            </Button>
+                        }
+                    >
+                        <SearchBar onSearch={handleSearch} />
+                        <SucursalesTable
+                            sucursales={filteredSucursales}
+                            onDelete={handleDelete}
+                            onEdit={handleEdit}
+                            loading={loading}
                         />
                     </Card>
+                </Col>
+                <Col span={24}>
+                    <Card title="Mapa de Sucursales">
+                        <MapComponent
+                            sucursales={filteredSucursales}
+                            onMapClick={handleMapClick}
+                            selectedSucursal={selectedSucursal}
+                        />
+                    </Card>
+                </Col>
+            </Row>
 
-                    {/* Tabla de sucursales */}
-                    <SucursalesTable
-                        tableData={tableData}
-                        loading={loading}
-                        markers={markers}
-                        setActiveMarker={setActiveMarker}
-                        setIsModalVisible={setIsModalVisible}
-                        handleDelete={handleDelete}
-                    />
-                </div>
-            </Spin>
-
-            {/* Modal para agregar/editar sucursales */}
-            <SucursalFormModal
-                isModalVisible={isModalVisible}
-                setIsModalVisible={setIsModalVisible}
-                activeMarker={activeMarker}
-                handleSave={handleSave}
+            <AddSucursalModal
+                visible={modalVisible}
+                onCancel={() => {
+                    setModalVisible(false);
+                    setEditingSucursal(null);
+                }}
+                onSubmit={handleAddSucursal}
+                initialValues={editingSucursal}
             />
         </div>
     );
 };
 
-export default Sucursal;
+export default SucursalPage;

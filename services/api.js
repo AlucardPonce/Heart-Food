@@ -8,7 +8,7 @@ const { validateUser,
     verifyOTP,
     toggleTwoFactorAuth,
     verifyResetOTP } = require("./CTL/UserCtl");
-const { insertSucursal, getSucursales, updateSucursal } = require("./CTL/MapCtl");
+const { insertSucursal, getSucursales, updateSucursal, deleteSucursal } = require("./CTL/MapCtl");
 const { verifyToken } = require("./Middleware/mid");
 const { insertProducto, getProductos, updateProducto, getProductoById, insertCategoria, getCategorias, deleteProductoPermanente, toggleStatusProducto } = require("./CTL/InventarioCtl");
 const { registrarVenta, getHistorialVentas, getProductosActivos, getVentaById } = require("./CTL/VentasCtl");
@@ -23,6 +23,7 @@ app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
 app.post('/sucursales', verifyToken, insertSucursal);
 app.get('/sucursales', verifyToken, getSucursales);
 app.post('/sucursales/update', verifyToken, updateSucursal);
+app.delete('/sucursales/:id', verifyToken, deleteSucursal);
 
 app.post('/productos', verifyToken, (req, res) => {
     insertProducto(req, res);
