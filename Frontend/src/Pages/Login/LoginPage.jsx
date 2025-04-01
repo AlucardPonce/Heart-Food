@@ -1,4 +1,4 @@
-import { Form, Input, Button, Card, Typography, message, Modal, Steps, Alert } from "antd";
+import { Form, Input, Button, Card, Typography, message, Modal, Steps, Alert, Select } from "antd";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 
 const { Title } = Typography;
 const { Step } = Steps;
+const { Option } = Select;
 
 const LoginPage = () => {
     const [loading, setLoading] = useState(false);
@@ -15,6 +16,7 @@ const LoginPage = () => {
     const [otp, setOtp] = useState("");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState(""); // Nuevo estado para la contraseña
+    const [sucursales, setSucursales] = useState([]); // Asegúrate de que sea un array vacío
     const registerFormRef = useRef(null);
     const navigate = useNavigate();
 
@@ -22,6 +24,27 @@ const LoginPage = () => {
 
     useEffect(() => {
         localStorage.removeItem("token");
+    }, []);
+
+    useEffect(() => {
+        const fetchSucursales = async () => {
+            try {
+                const response = await axios.get(`${API_URL}/ob/sucursales`);
+                console.log("Sucursales obtenidas:", response.data.data); // Verifica la estructura de los datos
+                if (Array.isArray(response.data.data)) {
+                    setSucursales(response.data.data);
+                } else {
+                    console.error("La respuesta no es un array:", response.data);
+                    setSucursales([]);
+                }
+            } catch (error) {
+                console.error("Error al obtener las sucursales:", error);
+                message.error("No se pudieron cargar las sucursales.");
+                setSucursales([]);
+            }
+        };
+
+        fetchSucursales();
     }, []);
 
     const onFinish = async (values) => {
@@ -136,6 +159,20 @@ const LoginPage = () => {
                     >
                         <Input.Password />
                     </Form.Item>
+
+                    <Form.Item
+                        label="Sucursal"
+                        name="sucursalId"
+                        rules={[{ required: true, message: "Por favor selecciona una sucursal" }]}
+                    >
+                        <Select placeholder="Selecciona una sucursal">
+                            {Array.isArray(sucursales) && sucursales.map((sucursal) => (
+                                <Option key={sucursal.id} value={sucursal.id}>
+                                    {sucursal.nombreSucursal}
+                                </Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
                 </Form>
             ),
             okText: 'Registrar',
@@ -145,8 +182,11 @@ const LoginPage = () => {
                     const values = await registerFormRef.current?.validateFields();
                     const userData = {
                         ...values,
-                        rol: "worker" // Rol por defecto
+                        rol: "worker", // Rol por defecto
+                        sucursalId: values.sucursalId, // Incluye el ID de la sucursal seleccionada
                     };
+
+                    console.log("Datos enviados al backend:", userData); // Verifica el contenido de userData
 
                     const response = await axios.post(`${API_URL}/register`, userData);
 

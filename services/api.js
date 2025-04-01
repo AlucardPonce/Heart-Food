@@ -22,6 +22,7 @@ app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
 
 app.post('/sucursales', verifyToken, insertSucursal);
 app.get('/sucursales', verifyToken, getSucursales);
+app.get('/ob/sucursales', getSucursales);
 app.post('/sucursales/update', verifyToken, updateSucursal);
 app.delete('/sucursales/:id', verifyToken, deleteSucursal);
 

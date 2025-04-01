@@ -381,9 +381,10 @@ const verifyOTP = async (req, res) => {
 
 // Controlador para registro con generación de secreto 2FA
 const registerUser = async (req, res) => {
-    const { nombre, apellidoPaterno, apellidoMaterno, gmail, username, rol, password } = req.body;
+    const { nombre, apellidoPaterno, apellidoMaterno, gmail, username, rol, password, sucursalId } = req.body;
 
-    if (!nombre || !apellidoPaterno || !gmail || !username || !rol || !password) {
+    // Validar campos requeridos
+    if (!nombre || !apellidoPaterno || !gmail || !username || !rol || !password || !sucursalId) {
         return res.status(400).json({
             statusCode: 400,
             intMessage: 'Todos los campos son requeridos excepto apellidoMaterno'
@@ -392,6 +393,7 @@ const registerUser = async (req, res) => {
 
     try {
         const usersRef = db.collection('USERS');
+        const sucursalesRef = db.collection('SUCURSALES');
 
         // Verificar si el usuario ya existe
         const usernameQuery = await usersRef.where('username', '==', username).get();
@@ -421,6 +423,15 @@ const registerUser = async (req, res) => {
             });
         }
 
+        // Verificar si la sucursal existe
+        const sucursalDoc = await sucursalesRef.doc(sucursalId).get();
+        if (!sucursalDoc.exists) {
+            return res.status(400).json({
+                statusCode: 400,
+                intMessage: 'La sucursal especificada no existe'
+            });
+        }
+
         // Generar hash de la contraseña
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
@@ -440,8 +451,9 @@ const registerUser = async (req, res) => {
             username,
             rol,
             password: hashedPassword,
+            sucursalId, // Relación con la sucursal
             twoFactorSecret: secret.base32,
-            twoFactorEnabled: true, // Por defecto desactivado
+            twoFactorEnabled: true, // Por defecto activado
             fechaCreacion: admin.firestore.FieldValue.serverTimestamp(),
             activo: true
         };
@@ -464,6 +476,7 @@ const registerUser = async (req, res) => {
                 username,
                 gmail,
                 rol,
+                sucursalId,
                 twoFactorSetup: true,
                 secretUrl: speakeasy.otpauthURL({
                     secret: secret.ascii,
