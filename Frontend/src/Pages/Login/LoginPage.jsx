@@ -188,28 +188,8 @@ const LoginPage = () => {
                 try {
                     const response = await axios.post(`${API_URL}/reset-password`, { email });
 
-                    if (response.data.requiresOTP) {
-                        Modal.info({
-                            title: "Verificación requerida",
-                            content: (
-                                <div>
-                                    <p>Hemos enviado un código OTP a tu correo.</p>
-                                    <Input
-                                        placeholder="Ingresa el código OTP"
-                                        onChange={(e) => setOtp(e.target.value)}
-                                    />
-                                </div>
-                            ),
-                            onOk: async () => {
-                                const otpResponse = await axios.post(`${API_URL}/verify-reset-otp`, {
-                                    email,
-                                    otpToken: otp
-                                });
-                                message.success(otpResponse.data.message);
-                            }
-                        });
-                    } else {
-                        message.success(response.data.message);
+                    if (response.data.statusCode === 200) {
+                        message.success("Correo de recuperación enviado exitosamente. Revisa tu bandeja de entrada.");
                     }
                 } catch (error) {
                     const resetErrorMessage = error.response?.data?.message || "No se pudo enviar el correo";

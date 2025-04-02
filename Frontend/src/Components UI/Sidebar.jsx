@@ -24,9 +24,6 @@ const Sidebar = () => {
 
     const handleMenuClick = (e) => {
         const modals = {
-            1: "Perfil",
-            3: "Contacto",
-            4: "Configuraciones",
             5: "Cerrar Sesión",
         };
 
@@ -61,21 +58,6 @@ const Sidebar = () => {
                     inlineCollapsed={collapsed}
                     onClick={handleMenuClick}
                     items={[
-                        {
-                            key: "1",
-                            icon: <UserOutlined />,
-                            label: "Perfil",
-                        },
-                        {
-                            key: "3",
-                            icon: <ContactsOutlined />,
-                            label: "Contacto",
-                        },
-                        {
-                            key: "4",
-                            icon: <SettingOutlined />,
-                            label: "Configuraciones",
-                        },
                         {
                             key: "5",
                             icon: <LogoutOutlined />,
