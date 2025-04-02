@@ -6,10 +6,10 @@ const express = require('express');
 const app = express();
 
 // Servir el directorio de imágenes como estático
-app.use('/uploads', express.static(path.join(__dirname, '../Frontend/public/uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../dist/uploads')));
 
 // Crear directorio si no existe
-const uploadDir = path.join(__dirname, '../../Frontend/public/uploads/productos');
+const uploadDir = path.join(__dirname, '../../dist/uploads/productos');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
