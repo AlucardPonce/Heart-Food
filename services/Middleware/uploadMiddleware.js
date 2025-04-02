@@ -1,6 +1,12 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const express = require('express');
+
+const app = express();
+
+// Servir el directorio de imágenes como estático
+app.use('/uploads', express.static(path.join(__dirname, '../Frontend/public/uploads')));
 
 // Crear directorio si no existe
 const uploadDir = path.join(__dirname, '../../Frontend/public/uploads/productos');
