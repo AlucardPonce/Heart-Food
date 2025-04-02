@@ -10,7 +10,7 @@ const MainLayout = () => {
     const [updates, setUpdates] = useState([]);
 
     useEffect(() => {
-        let eventSource = new EventSource("http://localhost:3001/events");
+        let eventSource = new EventSource("https://heart-food-back.onrender.com/events");
 
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -22,7 +22,7 @@ const MainLayout = () => {
             console.error("Error en SSE, reconectando...");
             eventSource.close();
             setTimeout(() => {
-                eventSource = new EventSource("http://localhost:3001/events");
+                eventSource = new EventSource("https://heart-food-back.onrender.com/events");
             }, 5000);
         };
 

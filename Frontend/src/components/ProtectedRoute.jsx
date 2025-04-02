@@ -18,7 +18,7 @@ const ProtectedRoute = ({ children }) => {
     useEffect(() => {
         const validateToken = async () => {
             try {
-                const response = await fetch("http://localhost:3001/validate-token", {
+                const response = await fetch("https://heart-food-back.onrender.com/validate-token", {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
