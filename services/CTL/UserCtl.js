@@ -88,26 +88,6 @@ const reset = async (req, res) => {
         const userDoc = userSnapshot.docs[0];
         const userData = userDoc.data();
 
-        // Si tiene 2FA habilitado, enviar OTP
-        if (userData.twoFactorEnabled && userData.twoFactorSecret) {
-            const tempToken = speakeasy.totp({
-                secret: userData.twoFactorSecret,
-                encoding: 'base32',
-                step: 300, // 5 minutos
-                digits: 6
-            });
-            console.log("OTP generado:", tempToken);
-
-            await sendTemporaryOTP(email, tempToken);
-
-            return res.json({
-                statusCode: 200,
-                intMessage: 'Se ha enviado un OTP a tu correo',
-                requiresOTP: true,
-                email
-            });
-        }
-
         // Restablecimiento normal
         const newPassword = generateRandomPassword();
         const hashedPassword = await bcrypt.hash(newPassword, 10);
