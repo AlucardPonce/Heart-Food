@@ -18,7 +18,8 @@ const LoginPage = () => {
     const registerFormRef = useRef(null);
     const navigate = useNavigate();
 
-    const API_URL = "https://heart-food-back.onrender.com";
+    //const API_URL = "https://heart-food-back.onrender.com";
+    const API_URL = "http://localhost:3001";
 
     useEffect(() => {
         localStorage.removeItem("token");

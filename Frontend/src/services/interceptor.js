@@ -3,7 +3,8 @@ import { message } from "antd";
 
 // Crear una instancia de Axios
 const apiClient = axios.create({
-    baseURL: "https://heart-food-back.onrender.com", // Cambia esto según tu backend
+    //baseURL: "https://heart-food-back.onrender.com",
+    baseURL: "http://localhost:3001",
     headers: {
         "Content-Type": "application/json",
     },
